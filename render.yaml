@@ -1,0 +1,27 @@
+# One-click deployment on Render (https://render.com/docs/yaml-spec).
+# Free plan: good for demos and judging. It sleeps after 15 minutes without traffic (about one
+# minute to wake) and its disk is temporary, so real company workspaces are lost on restart.
+# For real use, switch plan to a paid one and uncomment the disk block.
+services:
+  - type: web
+    name: wazin
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: WAZIN_DATA_KEY
+        generateValue: true   # random base64-encoded 256-bit key = exactly what AES-256 needs
+      - key: WAZIN_DB
+        value: ./var/wazin.db  # with a paid plan + disk use /var/data/wazin.db
+      - key: ANTHROPIC_API_KEY
+        sync: false           # optional: lets Wazin read free-text email invoices with AI
+    # disk:
+    #   name: wazin-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

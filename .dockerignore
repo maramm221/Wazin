@@ -1,0 +1,8 @@
+node_modules
+var
+*.db*
+.git
+test
+eval
+docs
+.github
