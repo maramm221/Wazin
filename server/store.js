@@ -4,6 +4,14 @@ import crypto from 'node:crypto';
 import { encrypt, decrypt, sha256 } from './crypto.js';
 import { tx } from './db.js';
 
+/** How a company works. Sensible defaults; each company can change them in Settings.
+ *  teams: which separate teams exist (when a team is off, its tasks go to the administrator).
+ *  matching: 'three' = order + goods received, 'two' = order only (services, no warehouse). */
+export const DEFAULT_SETTINGS = Object.freeze({
+  teams: Object.freeze({ finance: true, procurement: true, warehouse: true, treasury: true }),
+  matching: 'three', priceTolerancePct: 1, earlyPay: true,
+});
+
 const now = () => Date.now();
 const json = (s, d) => (s ? JSON.parse(s) : d);
 
@@ -23,17 +31,21 @@ export class Store {
   tx(fn) { return tx(this.db, fn); }
 
   // ---------- orgs ----------
-  createOrg({ name, kind, approvalLimit = 50000, ttlMs }) {
+  createOrg({ name, kind, approvalLimit = 50000, ttlMs, settings }) {
     const id = `org_${crypto.randomUUID()}`;
     this.#p('INSERT INTO orgs (id,name,kind,approval_limit,created_at,expires_at) VALUES (?,?,?,?,?,?)')
       .run(id, name, kind, approvalLimit, now(), ttlMs ? now() + ttlMs : null);
+    if (settings) this.updateOrg(id, { settings });
     return this.getOrg(id);
   }
   getOrg(id) {
     const r = this.#p('SELECT * FROM orgs WHERE id = ?').get(id);
-    return r && { id: r.id, name: r.name, kind: r.kind, approvalLimit: r.approval_limit, createdAt: r.created_at, expiresAt: r.expires_at };
+    let saved = {};
+    try { saved = JSON.parse(r?.settings_json || '{}'); } catch { /* keep defaults */ }
+    return r && { id: r.id, name: r.name, kind: r.kind, approvalLimit: r.approval_limit, settings: { ...DEFAULT_SETTINGS, ...saved, teams: { ...DEFAULT_SETTINGS.teams, ...(saved.teams || {}) } }, createdAt: r.created_at, expiresAt: r.expires_at };
   }
-  updateOrg(id, { name, approvalLimit }) {
+  updateOrg(id, { name, approvalLimit, settings }) {
+    if (settings !== undefined) this.#p('UPDATE orgs SET settings_json = ? WHERE id = ?').run(JSON.stringify(settings), id);
     if (name !== undefined) this.#p('UPDATE orgs SET name = ? WHERE id = ?').run(name, id);
     if (approvalLimit !== undefined) this.#p('UPDATE orgs SET approval_limit = ? WHERE id = ?').run(approvalLimit, id);
   }
@@ -234,6 +246,7 @@ export class SqlERP {
     this.writes = { processed: null, posts: [], park: null, grns: [], release: [] };
   }
   approvalLimit() { return this.s.getOrg(this.org).approvalLimit; }
+  policy() { return this.s.getOrg(this.org).settings; }
   findVendor({ sellerVat, sellerName }) {
     return (sellerVat && this.s.getVendor(this.org, sellerVat)) || (sellerName ? this.s.findVendorByName(this.org, sellerName) : undefined);
   }

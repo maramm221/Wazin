@@ -8,6 +8,7 @@
 export const REQUIRED_FIELDS = ['invoiceNumber', 'issueDate', 'sellerName', 'sellerVat', 'poNumber', 'lines', 'subtotal', 'vatAmount', 'total'];
 
 const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
+/** Convert Arabic-Indic and Persian digits (and Arabic separators) to Western digits. */
 export function normalizeDigits(s) {
   return String(s)
     .replace(ARABIC_DIGITS, (d) => String((d.charCodeAt(0) & 0xf) % 10))
@@ -16,6 +17,7 @@ export function normalizeDigits(s) {
 }
 export const toNumber = (s) => (s === undefined || s === null || s === '' ? undefined : Number(normalizeDigits(s).replace(/[,\s]|SAR|ر\.س|ريال/g, '')));
 
+/** List the required fields that extraction could not find; an empty list means the invoice is complete. */
 export function missingFields(inv) {
   return REQUIRED_FIELDS.filter((f) => {
     const v = inv[f];
@@ -43,6 +45,7 @@ function unescapeXml(s) {
   return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 }
 
+/** Tier 1: read a ZATCA UBL 2.1 XML e-invoice directly. No AI, no tokens. Returns null if it is not UBL. */
 export function parseUBL(xml) {
   // Strip the line items first so top-level <cbc:ID> is the invoice number.
   const head = xml.replace(/<cac:InvoiceLine[\s\S]*?<\/cac:InvoiceLine>/g, '');
@@ -99,6 +102,7 @@ function findLabel(lines, labels) {
   return undefined;
 }
 
+/** Tier 2: read labelled Arabic or English invoice text with exact patterns. No AI, no tokens. */
 export function parseText(text) {
   const t = normalizeDigits(text);
   const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -133,6 +137,7 @@ export function parseText(text) {
 }
 
 // ---------------- Tier 3: LLM ----------------
+/** Tier 3 prompt: ask a language model to return the invoice fields as JSON, once. */
 export function buildLLMPrompt(doc) {
   return `Extract the supplier invoice below into JSON. Reply with JSON only, no prose.
 Schema: {"invoiceNumber":str,"issueDate":"YYYY-MM-DD","sellerName":str,"sellerVat":str (digits only),"poNumber":str,"iban":str|null,"lines":[{"sku":str|null,"name":str,"qty":num,"unitPrice":num}],"subtotal":num,"vatAmount":num,"total":num,"qr":str|null}
@@ -143,6 +148,7 @@ ${doc}
 """`;
 }
 
+/** Parse and sanitise the model's JSON reply; anything malformed is rejected, never guessed. */
 export function parseLLMJson(raw) {
   const s = String(raw);
   const start = s.indexOf('{');
@@ -168,6 +174,7 @@ export function parseLLMJson(raw) {
 
 export const estimateTokens = (s) => Math.ceil(String(s).length / 4);
 
+/** Detect whether the input is ZATCA UBL XML or text, so the cheapest reader is tried first. */
 export function detectFormat(doc) {
   const t = String(doc).trim();
   if (t.startsWith('<') && /<(\w+:)?Invoice[\s>]/.test(t)) return 'ubl';

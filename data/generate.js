@@ -158,7 +158,7 @@ export function expectedFor(defs) {
   return { decision: defs.includes('iban_change') ? 'BLOCKED' : 'EXCEPTION', codes };
 }
 
-export function buildScenario({ seed = 2026, n = 300, emailShare = 0.1, approvalLimit = 50000, compoundShare = 0 } = {}) {
+export function buildScenario({ seed = 2026, n = 300, emailShare = 0.1, approvalLimit = 50000, compoundShare = 0, vendors = VENDORS } = {}) {
   const rnd = mulberry32(seed);
   const pick = (a) => a[Math.floor(rnd() * a.length)];
   const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
@@ -200,7 +200,7 @@ export function buildScenario({ seed = 2026, n = 300, emailShare = 0.1, approval
       continue;
     }
 
-    const vendor = pick(VENDORS);
+    const vendor = pick(vendors);
     const nLines = int(1, 3);
     const chosen = [...vendor.items].sort(() => rnd() - 0.5).slice(0, nLines);
     const scale = has('over_limit') ? 6 : 1;
@@ -256,7 +256,7 @@ export function buildScenario({ seed = 2026, n = 300, emailShare = 0.1, approval
     if ((defect === 'clean' || defect === 'over_limit') && defs.length === 1 && format !== 'email') approvedClean.push({ inv, vendor });
   }
 
-  return { vendors: VENDORS, purchaseOrders, goodsReceipts, lateGRNs, invoices, approvalLimit };
+  return { vendors, purchaseOrders, goodsReceipts, lateGRNs, invoices, approvalLimit };
 
   function makeEntry(i, inv, vendor, format, defect, expected = EXPECTED[defect]) {
     const doc = format === 'ubl' ? renderUBL(inv) : format === 'text' ? renderText(inv, vendor) : format === 'arabic' ? renderArabic(inv, vendor) : renderEmail(inv);

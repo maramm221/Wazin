@@ -2,6 +2,7 @@
 // Used by the benchmark, the unit tests and the CLI. The web server uses the SQLite adapter
 // in server/store.js, which implements exactly the same methods.
 
+/** In-memory ERP used by the CLI, the benchmark and the unit tests. Same interface as SqlERP in server/store.js. */
 export class ERP {
   constructor({ vendors = [], purchaseOrders = [], goodsReceipts = [], approvalLimit = 50000 } = {}) {
     this.vendors = new Map(vendors.map((v) => [v.vat, v]));

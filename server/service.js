@@ -5,12 +5,36 @@ import { isValidSaudiVat, round2 } from '../src/zatca.js';
 import { SqlERP } from './store.js';
 import { hashPassword, verifyPassword, passwordProblem, randomToken, DUMMY_HASH } from './crypto.js';
 import { buildDemo } from '../data/demo.js';
+import { DEFAULT_SETTINGS } from './store.js';
 import { parseCSV } from './csv.js';
 
 const SEED_PEOPLE = {
   ap: ['ap@sahara.example', 'Reem Al-Qahtani'], finance: ['finance@sahara.example', 'Faisal Al-Harbi'], procurement: ['procurement@sahara.example', 'Sara Al-Otaibi'],
   warehouse: ['warehouse@sahara.example', 'Omar Al-Ghamdi'], treasury: ['treasury@sahara.example', 'Noura Al-Shehri'], admin: ['admin@sahara.example', 'Khalid Al-Dosari'],
 };
+
+/** An error with an HTTP status and a stable code that the web app translates (e_<code>). */
+/** Validate company settings from the web app; anything unknown or out of range is refused. */
+function cleanSettings(input, current) {
+  if (!input || typeof input !== 'object') throw bad('invalid_settings');
+  const out = { ...current, teams: { ...current.teams } };
+  if (input.teams !== undefined) {
+    if (typeof input.teams !== 'object' || input.teams === null) throw bad('invalid_settings');
+    for (const k of Object.keys(out.teams)) if (input.teams[k] !== undefined) out.teams[k] = input.teams[k] === true;
+  }
+  if (input.matching !== undefined) {
+    if (!['two', 'three'].includes(input.matching)) throw bad('invalid_settings');
+    out.matching = input.matching;
+  }
+  if (input.priceTolerancePct !== undefined) {
+    const v = Number(input.priceTolerancePct);
+    if (!Number.isFinite(v) || v < 0 || v > 10) throw bad('invalid_settings');
+    out.priceTolerancePct = v;
+  }
+  if (input.earlyPay !== undefined) out.earlyPay = input.earlyPay === true;
+  if (out.matching === 'two') out.teams.warehouse = false; // no deliveries to record
+  return out;
+}
 
 export class AppError extends Error {
   constructor(status, code, detail) {
@@ -24,6 +48,7 @@ const bad = (code, detail) => new AppError(400, code, detail);
 const forbidden = () => new AppError(403, 'forbidden');
 const notFound = () => new AppError(404, 'not_found');
 
+/** The six roles. The administrator may do every step, so a one-person company works too. */
 export const ROLES = ['admin', 'ap', 'finance', 'procurement', 'warehouse', 'treasury'];
 export const ROLE_OWNER = { ap: ['AP', 'VENDOR'], finance: ['FINANCE_MANAGER'], procurement: ['PROCUREMENT'], warehouse: ['WAREHOUSE'], treasury: ['TREASURY'], admin: Object.keys(OWNERS) };
 const OPEN = ['APPROVAL_REQUIRED', 'PARKED', 'EXCEPTION', 'BLOCKED', 'REVIEW'];
@@ -67,14 +92,16 @@ export class Service {
 
   // ======================= accounts =======================
   signup({ company, name, email: em, password }) {
-    const c = str(company, 120), n = str(name, 120), e = email(em);
+    const c = str(company, 120), n = str(name, 120);
     if (!c) throw bad('company_required');
     if (!n) throw bad('name_required');
+    const e = email(em);
     const p = passwordProblem(password);
     if (p) throw bad(p);
     if (this.s.getUserByEmail(e)) throw new AppError(409, 'email_taken');
     return this.s.tx(() => {
-      const org = this.s.createOrg({ name: c, kind: 'workspace' });
+      // A new company starts as a one-person set-up (every task to the owner); teams are added in Settings.
+      const org = this.s.createOrg({ name: c, kind: 'workspace', settings: { ...DEFAULT_SETTINGS, teams: { finance: false, procurement: false, warehouse: false, treasury: false } } });
       const user = this.s.createUser({ orgId: org.id, email: e, name: n, role: 'admin', pwHash: hashPassword(password) });
       this.s.audit(org.id, e, 'workspace.created', org.id, { company: c });
       return this.#newSession(user);
@@ -121,7 +148,7 @@ export class Service {
   }
 
   publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: u.role }; }
-  me(ctx) { return { user: this.publicUser(ctx.user), org: { name: ctx.org.name, kind: ctx.org.kind, approvalLimit: ctx.org.approvalLimit, expiresAt: ctx.org.expiresAt }, csrf: ctx.csrf, ai: !!this.llm }; }
+  me(ctx) { return { user: this.publicUser(ctx.user), org: { name: ctx.org.name, kind: ctx.org.kind, approvalLimit: ctx.org.approvalLimit, settings: ctx.org.settings, expiresAt: ctx.org.expiresAt }, csrf: ctx.csrf, ai: !!this.llm }; }
 
   changePassword(ctx, { current, next }) {
     if (!verifyPassword(String(current || ''), ctx.user.pwHash)) throw new AppError(401, 'bad_credentials');
@@ -155,7 +182,7 @@ export class Service {
     this.s.audit(ctx.org.id, ctx.user.email, 'user.removed', id, {});
   }
 
-  updateSettings(ctx, { name, approvalLimit }) {
+  updateSettings(ctx, { name, approvalLimit, settings }) {
     if (!can(ctx.user)) throw forbidden();
     const patch = {};
     if (name !== undefined) { patch.name = str(name, 120); if (!patch.name) throw bad('company_required'); }
@@ -164,6 +191,7 @@ export class Service {
       if (!Number.isFinite(v) || v < 0 || v > 1e9) throw bad('invalid_amount');
       patch.approvalLimit = v;
     }
+    if (settings !== undefined) patch.settings = cleanSettings(settings, ctx.org.settings);
     this.s.updateOrg(ctx.org.id, patch);
     this.s.audit(ctx.org.id, ctx.user.email, 'settings.updated', ctx.org.id, patch);
   }

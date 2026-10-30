@@ -23,6 +23,7 @@ const CSP = [
 ].join('; ');
 
 // ---------- logging (JSON lines; never bodies, cookies or secrets) ----------
+/** Structured JSON-lines logger. Never given request bodies, cookies, passwords or bank details. */
 export function makeLogger(level = process.env.LOG_LEVEL || 'info', out = process.stdout) {
   const order = { debug: 10, info: 20, warn: 30, error: 40, silent: 99 };
   return (lvl, msg, fields = {}) => {
@@ -53,6 +54,10 @@ function parseCookies(h = '') {
   return out;
 }
 
+/**
+ * Build the HTTP server: routes, sessions, CSRF, rate limits, security headers and static files.
+ * Returns { server, store, service, log, ready, close }. Settings come from opts.env (see docs/DEPLOY.md).
+ */
 export function createApp(opts = {}) {
   const env = { ...process.env, ...opts.env };
   const production = env.NODE_ENV === 'production';

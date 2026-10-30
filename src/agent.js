@@ -10,6 +10,7 @@ import { extract } from './extract.js';
 import { checkCompliance, round2 } from './zatca.js';
 import { threeWayMatch } from './match.js';
 
+/** Every outcome Wazin can reach for an invoice, with English and Arabic labels. */
 export const DECISIONS = {
   APPROVED_AUTO: { en: 'Approved & scheduled', ar: 'معتمدة ومجدولة للدفع' },
   APPROVAL_REQUIRED: { en: 'Waiting for manager approval', ar: 'بانتظار اعتماد المدير' },
@@ -19,6 +20,7 @@ export const DECISIONS = {
   REVIEW: { en: 'Needs data review', ar: 'تحتاج مراجعة البيانات' },
 };
 
+/** The team that owns the next step for an invoice (NONE when Wazin finished it alone). */
 export const OWNERS = {
   AP: { en: 'Accounts Payable', ar: 'الحسابات الدائنة' },
   VENDOR: { en: 'Supplier', ar: 'المورد' },
@@ -42,6 +44,7 @@ export const STEP_NAMES = {
   resumed: { en: 'Resumed automatically', ar: 'استؤنفت تلقائياً' },
 };
 
+/** Reason codes that are the supplier's to fix (ZATCA format and maths problems). */
 export const COMPLIANCE_CODES = ['INVALID_VAT_NUMBER', 'VAT_CALC_ERROR', 'QR_MISMATCH', 'QR_MISSING'];
 
 const FIELD_AR = { invoiceNumber: 'رقم الفاتورة', issueDate: 'التاريخ', sellerName: 'اسم المورد', sellerVat: 'الرقم الضريبي', poNumber: 'رقم أمر الشراء', lines: 'البنود', subtotal: 'المجموع', vatAmount: 'الضريبة', total: 'الإجمالي' };
@@ -55,14 +58,22 @@ export const sar = (n) => `SAR ${Number(n).toLocaleString('en-US', { minimumFrac
 const sarAr = (n) => `${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ريال`;
 export const maskIban = (iban) => (iban ? `${iban.slice(0, 4)} •••• ${iban.slice(-4)}` : '—');
 
+/**
+ * The accounts payable agent. Give it an ERP adapter (see src/erp.js or server/store.js SqlERP)
+ * and call process(doc) for each incoming invoice. It never pays on a model's word: every
+ * number goes through the same rules, and the decision follows a fixed priority (README).
+ */
 export class WazinAgent {
   /**
    * @param {object} erp  adapter: findVendor, getPO, getGRNs, duplicateOf, markProcessed, post, park, approvalLimit
-   * @param {{llm?: (prompt:string)=>Promise<string>}} opts
+   * @param {{llm?: (prompt:string)=>Promise<string>, skip?: string[]}} opts
+   *   skip: checks to switch off ('zatca', 'bank', 'duplicate', 'match'). Only the ablation study
+   *   (eval/heldout.js) uses it, to measure what each check contributes; the product never does.
    */
-  constructor(erp, { llm } = {}) {
+  constructor(erp, { llm, skip = [] } = {}) {
     this.erp = erp;
     this.llm = llm;
+    this.skip = new Set(skip);
     this.seq = 0;
     this.log = [];
   }
@@ -70,6 +81,9 @@ export class WazinAgent {
   async process(doc, { id } = {}) {
     const t0 = performance.now();
     const rid = id || `WZN-${String(++this.seq).padStart(4, '0')}`;
+    // The company's own settings (matching mode, price tolerance, early payment); defaults if none.
+    const pol = (this.erp.policy && (await this.erp.policy())) || {};
+    this.policyNow = pol;
     const steps = [];
     const step = (key, status, detail, detailAr) => steps.push({ key, name: STEP_NAMES[key].en, nameAr: STEP_NAMES[key].ar, status, detail, detailAr });
     const issues = [];
@@ -93,7 +107,7 @@ export class WazinAgent {
       `${tier[1]}: ${inv.invoiceNumber} من ${inv.sellerName}، ${sarAr(inv.total)}، ${inv.lines.length} بند.`);
 
     // 2. ZATCA compliance
-    const comp = checkCompliance(inv);
+    const comp = this.skip.has('zatca') ? [] : checkCompliance(inv);
     issues.push(...comp);
     step('zatca', comp.length ? 'fail' : 'ok',
       comp.length ? comp.map((c) => c.message).join(' ') : 'VAT number, 15% VAT maths and QR code all pass.',
@@ -104,7 +118,7 @@ export class WazinAgent {
     if (!vendor) {
       issues.push({ code: 'VENDOR_UNKNOWN', message: `${inv.sellerName} (${inv.sellerVat}) is not a registered supplier.`, messageAr: `${inv.sellerName} (${inv.sellerVat}) ليس مورداً مسجلاً.` });
       step('vendor', 'fail', 'Unknown supplier: not in the supplier list.', 'مورد غير معروف: غير موجود في قائمة الموردين.');
-    } else if (inv.iban && inv.iban !== vendor.iban) {
+    } else if (!this.skip.has('bank') && inv.iban && inv.iban !== vendor.iban) {
       issues.push({ code: 'BANK_DETAILS_CHANGED', message: `Invoice asks for payment to ${maskIban(inv.iban)}, but the verified account on file is ${maskIban(vendor.iban)}.`, messageAr: `الفاتورة تطلب الدفع إلى ${maskIban(inv.iban)} بينما الحساب الموثّق لدينا ${maskIban(vendor.iban)}.` });
       step('vendor', 'fail', 'The bank account on the invoice is different from the verified one. This is the most common payment fraud.',
         'الحساب البنكي في الفاتورة يختلف عن الحساب الموثّق. هذا أكثر أنماط الاحتيال في الدفع شيوعاً.');
@@ -113,7 +127,7 @@ export class WazinAgent {
     }
 
     // 4. Duplicate detection (same number, or same vendor+PO+amount+date under a new number)
-    const dup = await this.erp.duplicateOf(inv, vendor);
+    const dup = this.skip.has('duplicate') ? null : await this.erp.duplicateOf(inv, vendor);
     if (dup && dup !== rid) {
       issues.push({ code: 'DUPLICATE', message: `Same invoice already handled as ${dup}.`, messageAr: `الفاتورة نفسها عولجت سابقاً برقم ${dup}.` });
       step('duplicate', 'fail', `Duplicate of ${dup}. Paying it would pay the supplier twice.`, `مكررة للفاتورة ${dup}. دفعها يعني الدفع مرتين.`);
@@ -126,15 +140,16 @@ export class WazinAgent {
       issues.push({ code: 'PO_NOT_FOUND', message: `Purchase order ${inv.poNumber} does not exist.`, messageAr: `أمر الشراء ${inv.poNumber} غير موجود.` });
       step('match', 'fail', `Purchase order ${inv.poNumber} not found.`, `أمر الشراء ${inv.poNumber} غير موجود.`);
     } else {
-      const invoiced = this.erp.invoicedQty ? await this.erp.invoicedQty(po.poNumber, rid) : {};
-      match = threeWayMatch(inv, po, await this.erp.getGRNs(po.poNumber), { invoiced });
+      const invoiced = this.erp.invoicedQty && !this.skip.has('duplicate') ? await this.erp.invoicedQty(po.poNumber, rid) : {};
+      const requireReceipt = pol.matching !== 'two';
+      match = this.skip.has('match') ? { issues: [], lines: [] } : threeWayMatch(inv, po, requireReceipt ? await this.erp.getGRNs(po.poNumber) : [], { invoiced, requireReceipt, priceTolerancePct: pol.priceTolerancePct ?? 1 });
       // A duplicate already explains any re-billed goods; report it once.
       if (issues.some((i) => i.code === 'DUPLICATE')) match.issues = match.issues.filter((i) => i.code !== 'ALREADY_INVOICED');
       issues.push(...match.issues);
       const onlyWaiting = match.issues.length && match.issues.every((i) => i.code === 'AWAITING_GRN');
       step('match', match.issues.length ? (onlyWaiting ? 'warn' : 'fail') : 'ok',
-        match.issues.length ? match.issues.map((i) => i.message).join(' ') : `Invoice matches ${po.poNumber} and the goods received, on every line.`,
-        match.issues.length ? match.issues.map((i) => i.messageAr).join(' ') : `الفاتورة تطابق ${po.poNumber} والبضاعة المستلمة في كل البنود.`);
+        match.issues.length ? match.issues.map((i) => i.message).join(' ') : requireReceipt ? `Invoice matches ${po.poNumber} and the goods received, on every line.` : `Invoice matches ${po.poNumber} on every line.`,
+        match.issues.length ? match.issues.map((i) => i.messageAr).join(' ') : requireReceipt ? `الفاتورة تطابق ${po.poNumber} والبضاعة المستلمة في كل البنود.` : `الفاتورة تطابق ${po.poNumber} في كل البنود.`);
     }
 
     // 6. Decide (riskiest finding wins)
@@ -172,7 +187,7 @@ export class WazinAgent {
   schedule(inv, vendor) {
     const terms = vendor?.paymentTermsDays ?? 30;
     const disc = vendor?.earlyPayDiscount; // {pct, days}
-    if (disc && disc.pct > 0) {
+    if (disc && disc.pct > 0 && this.policyNow?.earlyPay !== false) {
       const discount = round2((inv.total * disc.pct) / 100);
       return { amount: round2(inv.total - discount), discount, payOn: addDays(inv.issueDate, disc.days), dueDate: addDays(inv.issueDate, terms) };
     }
@@ -222,12 +237,14 @@ export class WazinAgent {
   }
 }
 
+/** Ledger line written when an invoice is approved: what was posted, to whom, and when it will be paid. */
 export function ledgerEntry(id, inv, vendor, payment, by) {
   return { id, invoiceNumber: inv.invoiceNumber, vendor: vendor?.nameEn, vendorVat: vendor?.vat, poNumber: inv.poNumber,
     amountExVat: inv.subtotal, inputVat: inv.vatAmount, total: inv.total, payAmount: payment.amount, payOn: payment.payOn, postedBy: by };
 }
 
 // ---------- Bilingual hand-off messages (deterministic templates: 0 tokens) ----------
+/** Draft the ready-to-send note (English and Arabic) for the team or supplier that must act. */
 export function draftMessage(r, vendor, po) {
   const inv = r.invoice;
   const ref = `${inv.invoiceNumber ?? '(no number)'} / ${inv.poNumber ?? '(no PO)'}`;

@@ -11,6 +11,7 @@ export const VAT_RATE = 0.15;
 
 export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
+/** ZATCA rule BR-KSA-40: a seller VAT number has 15 digits and starts and ends with 3. */
 export function isValidSaudiVat(vat) {
   return typeof vat === 'string' && /^3\d{13}3$/.test(vat);
 }
@@ -28,6 +29,7 @@ function base64ToBytes(b64) {
   return out;
 }
 
+/** The five core TLV tags of the ZATCA QR code (Phase 1). */
 export const QR_TAGS = { 1: 'sellerName', 2: 'vatNumber', 3: 'timestamp', 4: 'total', 5: 'vatTotal' };
 
 /** Encode the 5 Phase-1 QR fields into ZATCA TLV Base64. Values are UTF-8 (Arabic names are multi-byte). */

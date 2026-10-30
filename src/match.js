@@ -1,13 +1,18 @@
 // Three-way match: invoice vs purchase order vs goods receipts.
 
 /**
+ * Compare each invoice line with the purchase order and, in three-way mode, the goods received.
+ * Options: priceTolerancePct (allowed price rise), invoiced (qty already billed per SKU),
+ * requireReceipt (false = two-way matching against the order only).
  * @returns {{issues: {code:string,message:string,line?:string}[], lines: object[]}}
  */
-export function threeWayMatch(inv, po, grns, { priceTolerancePct = 1, invoiced = {} } = {}) {
+export function threeWayMatch(inv, po, grns, { priceTolerancePct = 1, invoiced = {}, requireReceipt = true } = {}) {
   const issues = [];
   const lines = [];
   const received = new Map();
-  for (const g of grns) for (const l of g.lines) received.set(l.sku, (received.get(l.sku) || 0) + l.qty);
+  // Two-way matching (no warehouse step): treat everything ordered as received.
+  if (!requireReceipt) for (const l of po.lines) received.set(l.sku, l.qty);
+  else for (const g of grns) for (const l of g.lines) received.set(l.sku, (received.get(l.sku) || 0) + l.qty);
 
   for (const il of inv.lines) {
     const pl = po.lines.find((p) => (il.sku && p.sku === il.sku) || p.name.toLowerCase() === String(il.name).toLowerCase());

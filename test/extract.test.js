@@ -94,3 +94,26 @@ test('helpers', () => {
   assert.equal(parseUBL('<Invoice></Invoice>').lines.length, 0);
   assert.equal(parseText('').lines.length, 0);
 });
+
+// Regression guards from the held-out study (eval/heldout.js): messy but valid documents read the same.
+test('messy text invoices read the same: CRLF, indentation, Arabic-Indic digits, shuffled header, lower-case labels', async () => {
+  const want = core((await extract(renderText(inv, vendor))).invoice);
+  const AR = '٠١٢٣٤٥٦٧٨٩';
+  const ls = renderText(inv, vendor).split('\n');
+  const end = ls.findIndex((l) => l.startsWith('Items'));
+  const variants = [
+    renderText(inv, vendor).replace(/\n/g, '\r\n'),
+    renderText(inv, vendor).split('\n').map((l) => `   ${l}  `).join('\n\n'),
+    renderText(inv, vendor).replace(/\d/g, (x) => AR[x]),
+    [ls[0], ...ls.slice(1, end).reverse(), ...ls.slice(end)].join('\n'),
+    ls.map((l) => (l.includes(':') && !l.startsWith('QR') ? l.slice(0, l.indexOf(':')).toLowerCase() + l.slice(l.indexOf(':')) : l)).join('\n'),
+  ];
+  for (const v of variants) assert.deepEqual(core((await extract(v)).invoice), want);
+});
+
+test('minified ZATCA XML reads the same as the formatted file', async () => {
+  const pretty = await extract(renderUBL(inv));
+  const mini = await extract(renderUBL(inv).replace(/>\s+</g, '><').trim());
+  assert.deepEqual(core(mini.invoice), core(pretty.invoice));
+  assert.equal(mini.usage.llmCalls, 0);
+});

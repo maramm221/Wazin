@@ -1,5 +1,6 @@
 // Small RFC 4180 CSV parser: quoted fields, escaped quotes, CRLF, UTF-8 BOM.
 // Returns an array of objects keyed by the lower-cased header row.
+/** Parse CSV text into an array of row objects keyed by the header row. */
 export function parseCSV(text) {
   const s = String(text).replace(/^﻿/, '');
   const rows = [];

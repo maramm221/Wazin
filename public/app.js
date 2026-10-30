@@ -42,6 +42,12 @@ const when = (ts) => new Date(ts).toLocaleString(isAr() ? 'ar-SA-u-ca-gregory-nu
 const STATUS_TONE = { APPROVED_AUTO: 'ok', APPROVED: 'ok', APPROVAL_REQUIRED: 'info', PARKED: 'wait', EXCEPTION: 'warn', BLOCKED: 'crit', REVIEW: 'neutral', REJECTED: 'neutral', CLOSED: 'neutral' };
 const pill = (status) => h('span', { class: `pill tone-${STATUS_TONE[status] || 'neutral'}`, text: t(`st_${status}`) });
 
+// Company set-up: which teams exist. A task for a team the company does not have goes to the administrator.
+const TEAM_OF_OWNER = { FINANCE_MANAGER: 'finance', PROCUREMENT: 'procurement', WAREHOUSE: 'warehouse', TREASURY: 'treasury' };
+const teamOn = (team) => state.me?.org?.settings?.teams?.[team] !== false;
+const ownerLabel = (owner) => (TEAM_OF_OWNER[owner] && !teamOn(TEAM_OF_OWNER[owner]) ? t('role_admin') : t(`ow_${owner}`));
+const availableRoles = () => ['ap', 'finance', 'procurement', 'warehouse', 'treasury', 'admin'].filter((r) => !['finance', 'procurement', 'warehouse', 'treasury'].includes(r) || teamOn(r));
+
 // ---------------------------------------------------------------- API
 class ApiError extends Error {
   constructor(code, status, detail) { super(code); this.code = code; this.status = status; this.detail = detail; }
@@ -338,10 +344,19 @@ function pageWelcome() {
       h('h3', { text: t(`role_${r}`) }),
       h('p', { text: t(`team_${r}`) }))))));
 
+  // Any size of company, and the suppliers on the other side.
+  const sizes = h('section', { class: 'band alt', id: 'sizes', 'aria-labelledby': 'sizes_h' }, h('div', { class: 'wrap' },
+    h('p', { class: 'eyebrow', text: t('sizes_eyebrow') }),
+    h('h2', { id: 'sizes_h', class: 'band-title', text: t('sizes_title') }),
+    h('div', { class: 'size-grid' }, ['small', 'mid', 'large', 'supplier'].map((k) => h('article', { class: `size-card${k === 'supplier' ? ' supplier' : ''}` },
+      h('p', { class: 'size-tag', text: t(`size_${k}_tag`) }),
+      h('h3', { text: t(`size_${k}_t`) }),
+      h('p', { text: t(`size_${k}_d`) }))))));
+
   // Trust and compliance.
   const trust = h('section', { class: 'band alt', id: 'trust', 'aria-labelledby': 'trust_h' }, h('div', { class: 'wrap trust-grid' },
     h('div', {}, h('p', { class: 'eyebrow', text: t('trust_eyebrow') }), h('h2', { id: 'trust_h', class: 'band-title', text: t('trust_title') }), h('p', { class: 'band-lead', text: t('trust_lead') })),
-    h('ul', { class: 'trust-list' }, [1, 2, 3, 4, 5].map((n) => h('li', {}, h('b', { text: t(`tr${n}_t`) }), h('span', { text: t(`tr${n}_d`) }))))));
+    h('ul', { class: 'trust-list' }, [1, 2, 3, 4, 6, 7, 5].map((n) => h('li', {}, h('b', { text: t(`tr${n}_t`) }), h('span', { text: t(`tr${n}_d`) }))))));
 
   const closing = h('section', { class: 'cta-band' }, h('div', { class: 'wrap cta-band-in' },
     h('div', {}, h('h2', { text: t('cta_title') }), h('p', { text: t('cta_lead') })),
@@ -349,7 +364,7 @@ function pageWelcome() {
       state.config.signup ? h('a', { class: 'btn primary big', href: '#/signup', text: t('open_account') }) : null,
       h('a', { class: 'btn big on-dark', href: '#/signin', text: t('sign_in') }))));
 
-  return publicFrame(hero, why, how, teams, trust, closing);
+  return publicFrame(hero, why, how, teams, sizes, trust, closing);
 }
 
 function formField(label, input, help) {
@@ -422,7 +437,7 @@ async function pageHome() {
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', { text: t('your_tasks') }), h('span', { class: 'count', text: String(d.myTasks.length) })),
       d.myTasks.length ? invoiceList(d.myTasks) : h('p', { class: 'empty-inline', text: t('no_tasks') })),
     h('section', { class: 'card' }, h('h2', { text: t('team_overview') }),
-      h('ul', { class: 'owners' }, ownersOrder.map((o) => h('li', {}, h('span', { text: t(`ow_${o}`) }), h('b', { class: d.byOwner[o] ? 'has' : '', text: String(d.byOwner[o] || 0) }))))));
+      h('ul', { class: 'owners' }, ownersOrder.filter((o) => !TEAM_OF_OWNER[o] || teamOn(TEAM_OF_OWNER[o])).map((o) => h('li', {}, h('span', { text: t(`ow_${o}`) }), h('b', { class: d.byOwner[o] ? 'has' : '', text: String(d.byOwner[o] || 0) }))))));
 }
 
 function invoiceList(rows) {
@@ -430,7 +445,7 @@ function invoiceList(rows) {
     h('a', { href: `#/invoice/${encodeURIComponent(r.id)}`, class: `inv-row tone-${STATUS_TONE[r.status]}` },
       h('span', { class: 'inv-main' }, h('b', { text: r.vendorName || t('unreadable') }), h('span', { class: 'muted small', text: `${r.invoiceNumber || r.id} · ${r.poNumber || '—'}` })),
       h('span', { class: 'inv-amt num', text: money(r.total) }),
-      h('span', { class: 'inv-state' }, pill(r.status), r.owner !== 'NONE' ? h('span', { class: 'muted small', text: t(`ow_${r.owner}`) }) : null)))));
+      h('span', { class: 'inv-state' }, pill(r.status), r.owner !== 'NONE' ? h('span', { class: 'muted small', text: ownerLabel(r.owner) }) : null)))));
 }
 
 // ---------------------------------------------------------------- invoices
@@ -472,7 +487,7 @@ async function pageInvoice(id) {
     h('p', { class: 'muted' }, `${inv.invoiceNumber || '—'} · ${v.id}`, ' · ', h('span', { class: 'num', text: `${t('sar')} ${money(inv.total)}` })));
 
   const verdict = h('section', { class: `verdict tone-${STATUS_TONE[v.status]}` },
-    h('div', {}, pill(v.status), v.owner !== 'NONE' ? h('span', { class: 'owner', text: `→ ${t(`ow_${v.owner}`)}` }) : null),
+    h('div', {}, pill(v.status), v.owner !== 'NONE' ? h('span', { class: 'owner', text: `→ ${ownerLabel(v.owner)}` }) : null),
     h('h2', { text: t('what_happened') }),
     r.issues.length ? h('ul', { class: 'issues' }, r.issues.map((i) => h('li', { text: pick(i.message, i.messageAr) })))
       : h('p', { text: pick(r.steps.at(-1)?.detail, r.steps.at(-1)?.detailAr) }),
@@ -530,7 +545,7 @@ function messageCard(m) {
 function actionPanel(v) {
   if (!v.actions.length) {
     if (['APPROVED_AUTO', 'APPROVED', 'REJECTED', 'CLOSED'].includes(v.status)) return null;
-    return h('section', { class: 'card muted-card' }, h('p', { text: t('not_your_action', { owner: t(`ow_${v.owner}`) }) }));
+    return h('section', { class: 'card muted-card' }, h('p', { text: t('not_your_action', { owner: ownerLabel(v.owner) }) }));
   }
   const area = h('div', {});
   const buttons = h('div', { class: 'action-buttons' }, v.actions.map((a) => h('button', {
@@ -678,7 +693,7 @@ async function pageNew() {
 async function pageOrders() {
   const [pos, sup] = await Promise.all([api('GET', '/api/purchase-orders'), api('GET', '/api/suppliers')]);
   const names = Object.fromEntries(sup.map((s) => [s.vat, pick(s.nameEn, s.nameAr)]));
-  const canRecord = ['warehouse', 'admin'].includes(state.me.user.role);
+  const canRecord = ['warehouse', 'admin'].includes(state.me.user.role) && state.me.org.settings?.matching !== 'two';
   const card = (p) => {
     const ord = p.lines.reduce((s, l) => s + l.qty, 0), rec = p.lines.reduce((s, l) => s + Math.min(l.received, l.qty), 0);
     const pct = ord ? Math.round((rec / ord) * 100) : 0;
@@ -779,9 +794,42 @@ async function pageSettings() {
   const coForm = h('form', { class: 'card form', novalidate: true }, h('h2', { text: t('company_settings') }), formField(t('company'), coName), formField(t('approval_limit'), lim, t('approval_limit_help')), coErr, h('button', { class: 'btn primary', type: 'submit', text: t('save') }));
   coForm.onsubmit = async (e) => { e.preventDefault(); coErr.hidden = true; try { await api('POST', '/api/settings', { name: coName.value, approvalLimit: Number(lim.value) }); await loadMe(); toast(t('saved')); render(); } catch (x) { showErr(coErr, x); } };
 
+  // How your company works: a few choices with sensible defaults.
+  const ws = state.me.org.settings || {};
+  const wErr = formError();
+  const radio = (name, value, checked, label, help) => h('label', { class: 'choice' }, h('input', { type: 'radio', name, value, checked }), h('span', {}, h('b', { text: label }), help ? h('span', { class: 'muted small', text: help }) : null));
+  const teamKeys = ['finance', 'procurement', 'warehouse', 'treasury'];
+  const anyTeam = teamKeys.some((k) => ws.teams?.[k]);
+  const teamBoxes = h('div', { class: 'team-boxes' }, teamKeys.map((k) => h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'team', value: k, checked: !!ws.teams?.[k] }), h('span', {}, h('b', { text: t(`role_${k}`) }), h('span', { class: 'muted small', text: t(`team_${k}`) })))));
+  teamBoxes.hidden = !anyTeam;
+  const who = h('fieldset', {}, h('legend', { text: t('ws_who') }),
+    radio('who', 'solo', !anyTeam, t('ws_solo'), t('ws_solo_help')),
+    radio('who', 'team', anyTeam, t('ws_team'), t('ws_team_help')), teamBoxes);
+  who.addEventListener('change', (e) => {
+    if (e.target.name !== 'who') return;
+    teamBoxes.hidden = e.target.value !== 'team';
+    const boxes = [...teamBoxes.querySelectorAll('input')];
+    if (e.target.value === 'team' && !boxes.some((x) => x.checked)) boxes.forEach((x) => (x.checked = true));
+  });
+  const how = h('fieldset', {}, h('legend', { text: t('ws_match') }),
+    radio('match', 'three', ws.matching !== 'two', t('ws_three'), t('ws_three_help')),
+    radio('match', 'two', ws.matching === 'two', t('ws_two'), t('ws_two_help')));
+  const tol = h('input', { type: 'number', min: 0, max: 10, step: 0.5, value: ws.priceTolerancePct ?? 1 });
+  const early = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: ws.earlyPay !== false }), h('span', {}, h('b', { text: t('ws_early') }), h('span', { class: 'muted small', text: t('ws_early_help') })));
+  const wForm = h('form', { class: 'card form', novalidate: true }, h('h2', { text: t('ws_title') }), h('p', { class: 'muted', text: t('ws_lead') }), who, how,
+    formField(t('ws_tol'), tol, t('ws_tol_help')), early, wErr, h('button', { class: 'btn primary', type: 'submit', text: t('save') }));
+  wForm.onsubmit = async (e) => {
+    e.preventDefault(); wErr.hidden = true;
+    const solo = wForm.querySelector('input[name=who]:checked').value === 'solo';
+    const teams = Object.fromEntries(teamKeys.map((k) => [k, !solo && wForm.querySelector(`input[name=team][value=${k}]`).checked]));
+    const matching = wForm.querySelector('input[name=match]:checked').value;
+    try { await api('POST', '/api/settings', { settings: { teams, matching, priceTolerancePct: Number(tol.value), earlyPay: early.querySelector('input').checked } }); await loadMe(); toast(t('saved')); render(); }
+    catch (x) { showErr(wErr, x); }
+  };
+
   const uErr = formError();
   const uName = h('input', { type: 'text', maxlength: 120 }), uEmail = h('input', { type: 'email', maxlength: 254 });
-  const uRole = h('select', {}, ['ap', 'finance', 'procurement', 'warehouse', 'treasury', 'admin'].map((r) => h('option', { value: r, text: t(`role_${r}`) })));
+  const uRole = h('select', {}, availableRoles().map((r) => h('option', { value: r, text: t(`role_${r}`) })));
   const secret = h('p', { class: 'secret', hidden: true, role: 'status' });
   const uForm = h('form', { class: 'action-form', novalidate: true }, h('div', { class: 'grid3' }, formField(t('full_name'), uName), formField(t('email'), uEmail), formField(t('role'), uRole)), uErr, h('button', { class: 'btn', type: 'submit', text: t('add_person') }), secret);
   uForm.onsubmit = async (e) => {
@@ -822,7 +870,7 @@ async function pageSettings() {
   const pForm = h('form', { class: 'card form', novalidate: true }, h('h2', { text: t('change_password') }), formField(t('current_password'), cur), formField(t('new_password'), nxt, t('password_rule')), pErr, h('button', { class: 'btn', type: 'submit', text: t('save') }));
   pForm.onsubmit = async (e) => { e.preventDefault(); pErr.hidden = true; try { await api('POST', '/api/me/password', { current: cur.value, next: nxt.value }); cur.value = nxt.value = ''; toast(t('saved')); } catch (x) { showErr(pErr, x); } };
 
-  return h('div', { class: 'stack' }, h('div', { class: 'page-head' }, h('h1', { text: t('settings_title') })), coForm, team, imports, pForm);
+  return h('div', { class: 'stack' }, h('div', { class: 'page-head' }, h('h1', { text: t('settings_title') })), wForm, coForm, team, imports, pForm);
 }
 
 // ---------------------------------------------------------------- boot

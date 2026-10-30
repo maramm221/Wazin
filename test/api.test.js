@@ -307,3 +307,39 @@ describe('malformed and hostile requests', () => {
     assert.equal(r.body.length, 0);
   });
 });
+
+describe('company set-up adapts the checks', () => {
+  let t, c;
+  before(async () => { t = await startApp({ WAZIN_LOGIN_LIMIT: '1000' }); c = t.client(); await c.as('admin'); });
+  after(() => t.stop());
+  const toner = () => laterInvoices.find((i) => i.label === 'Toner & paper').doc; // goods not received yet
+
+  test('defaults: three-way matching, all teams, 1% tolerance, early payment on', async () => {
+    const me = (await c.call('GET', '/api/me')).body;
+    assert.deepEqual(me.org.settings, { teams: { finance: true, procurement: true, warehouse: true, treasury: true }, matching: 'three', priceTolerancePct: 1, earlyPay: true });
+    assert.equal((await c.call('POST', '/api/invoices', { doc: toner() })).body.status, 'PARKED', 'waits for the delivery');
+  });
+
+  test('two-way matching (no warehouse step) pays without a goods receipt, and turns the warehouse team off', async () => {
+    const r = await c.call('POST', '/api/settings', { settings: { matching: 'two' } });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.org.settings.teams.warehouse, false);
+    const doc = toner().replace(/ALN-25133/g, 'ALN-77001').replace(/2026-10-28/g, '2026-10-30');
+    const v = (await c.call('POST', '/api/invoices', { doc })).body;
+    assert.ok(!v.result.reasonCodes.includes('AWAITING_GRN'), v.result.reasonCodes.join());
+  });
+
+  test('a one-person company: every team off is accepted', async () => {
+    const r = await c.call('POST', '/api/settings', { settings: { teams: { finance: false, procurement: false, warehouse: false, treasury: false } } });
+    assert.equal(r.status, 200);
+    assert.ok(Object.values(r.body.org.settings.teams).every((x) => x === false));
+  });
+
+  test('settings are validated and only the administrator may change them', async () => {
+    for (const bad of [{ matching: 'four' }, { priceTolerancePct: 50 }, { priceTolerancePct: 'x' }, { teams: 'all' }]) {
+      assert.equal((await c.call('POST', '/api/settings', { settings: bad })).status, 400, JSON.stringify(bad));
+    }
+    const ap = t.client(); await ap.as('ap');
+    assert.equal((await ap.call('POST', '/api/settings', { settings: { matching: 'two' } })).status, 403);
+  });
+});

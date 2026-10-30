@@ -23,6 +23,8 @@ A **web application** (software as a service). People use it in a browser on a c
 
 Each person sees **their own tasks** on the home page, with numbered steps for what to do next.
 
+**Fits any size of company.** In Settings → *How your company works*, a company says whether one person does everything or which teams it has, whether it checks invoices against the order and the delivery (three-way) or the order only (two-way, for services), how much price difference it accepts, and whether to take early-payment discounts. New companies start as a one-person set-up.
+
 ## What Wazin decides
 
 | Finding | Wazin does | Hands to |
@@ -43,9 +45,10 @@ You need **Node.js 22.13 or newer** (https://nodejs.org). No other installs, no 
 ```bash
 cd wazin
 WAZIN_SEED_PASSWORD="choose-a-password-1" npm start   # open http://localhost:3000 and sign in as ap@sahara.example
-npm test             # 82 automated tests
+npm test             # 88 automated tests
 npm run eval         # 300-invoice benchmark  -> eval/RESULTS.md
 npm run stress       # 3,000-invoice stress test -> eval/STRESS.md
+npm run heldout      # unseen data, messy inputs, ablation, settings -> eval/HELDOUT.md
 npm run demo         # the 13-invoice demo in the terminal, no browser
 ```
 
@@ -90,7 +93,7 @@ server/     HTTP layer, sessions, roles, encryption, SQLite storage, audit chain
 src/        the agent: reading, ZATCA checks, three-way match, decisions, messages
 data/       the reference company (Sahara Trading Co.) and the labelled benchmark generator
 eval/       benchmark and stress test
-test/       82 automated tests
+test/       88 automated tests
 ```
 
 **Where the AI is, and where it is not.** ZATCA XML e-invoices and labelled Arabic or English text are read directly, with zero AI tokens, in under a millisecond. Only free text (an email, OCR output) goes to a language model, once. The model never decides whether to pay: every number it extracts goes through the same rules, so a wrong figure is caught, not paid. On the 300-invoice benchmark this used about 18,500 tokens instead of an estimated 2 million for an agent that calls a model at every step.
@@ -101,12 +104,16 @@ test/       82 automated tests
 
 | | Result |
 |---|---|
-| Automated tests | **82 / 82 passing** (`npm test`) |
+| Automated tests | **88 / 88 passing** (`npm test`) |
 | Correct decision, 300 labelled invoices | **100%** of the 272 read without AI |
 | Invoices paid that should not have been | **0** |
 | Stress test: 3,000 invoices, 622 with 2–3 problems at once | **100% correct, 0 false payments** |
 | Waiting invoices cleared automatically when goods arrived | **13 / 13** |
 | Money stopped (duplicates, fraud, overcharges) | **SAR 364,383** |
+| **Held-out:** 1,500 invoices from 5 unseen seeds | **100% correct, 0 wrong payments** |
+| **Held-out:** 600 invoices from 6 unseen suppliers (incl. 2–3 problems at once) | **100% correct, 0 wrong payments** |
+| **Robustness:** messy inputs (line breaks, spacing, Arabic-Indic digits, field order, lower-case labels, minified XML) | **100% correct when read, 0 wrong payments** |
+| **Ablation:** switching off any one check | **12–64 wrong payments, SAR 169K–808K paid wrongly** (so each check earns its place) |
 
 The benchmark data is synthetic and labelled, so it proves the rules and routing are exact. Reading accuracy on real scanned invoices is the first thing a pilot would measure.
 
@@ -117,6 +124,6 @@ The benchmark data is synthetic and labelled, so it proves the rules and routing
 - PDF invoices: paste their text or upload the XML; reading PDF files directly is next.
 - One server instance with SQLite handles thousands of invoices a day. To run several instances, move storage to PostgreSQL and rate limits to Redis; the storage layer is isolated in `server/store.js` for that.
 
-Sources for every fact: [docs/SOURCES.md](docs/SOURCES.md). The reference company, its suppliers, orders and bank accounts are fictional; the rules are real.
+How the code is organised: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Sources for every fact: [docs/SOURCES.md](docs/SOURCES.md). The reference company, its suppliers, orders and bank accounts are fictional; the rules are real.
 
 MIT licence. © 2026 Maram Talib.

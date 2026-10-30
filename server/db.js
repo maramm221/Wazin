@@ -115,8 +115,11 @@ const MIGRATIONS = [
      hash TEXT NOT NULL,
      PRIMARY KEY (org_id, seq)
    );`,
+  // 2: per-company working settings (team set-up, 2- or 3-way matching, tolerance, early payment).
+  `ALTER TABLE orgs ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}';`,
 ];
 
+/** Open (or create) the SQLite database in WAL mode and run any pending migrations. */
 export function openDb(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
   const db = new DatabaseSync(file);

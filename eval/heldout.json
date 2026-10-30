@@ -1,0 +1,272 @@
+{
+  "date": "2026-10-30",
+  "node": "v22.23.4",
+  "seeds": [
+    {
+      "seed": 70101,
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "seed": 70202,
+      "n": 300,
+      "readable": 270,
+      "review": 30,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "seed": 70303,
+      "n": 300,
+      "readable": 266,
+      "review": 34,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "seed": 70404,
+      "n": 300,
+      "readable": 272,
+      "review": 28,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "seed": 70505,
+      "n": 300,
+      "readable": 270,
+      "review": 30,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    }
+  ],
+  "vendors": {
+    "n": 300,
+    "readable": 272,
+    "review": 28,
+    "accuracy": 1,
+    "falseApprovals": 0,
+    "wronglyPaid": 0,
+    "errors": []
+  },
+  "vendorsCompound": {
+    "n": 300,
+    "readable": 278,
+    "review": 22,
+    "accuracy": 1,
+    "falseApprovals": 0,
+    "wronglyPaid": 0,
+    "errors": []
+  },
+  "perturb": [
+    {
+      "name": "Windows line breaks (CRLF)",
+      "changed": 300,
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "name": "Extra blank lines, indentation and trailing spaces",
+      "changed": 138,
+      "n": 138,
+      "readable": 109,
+      "review": 29,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "name": "All digits written as Arabic-Indic (٠١٢٣)",
+      "changed": 109,
+      "n": 109,
+      "readable": 109,
+      "review": 0,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "name": "Header fields in a different order",
+      "changed": 105,
+      "n": 105,
+      "readable": 105,
+      "review": 0,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "name": "Lower-case labels",
+      "changed": 81,
+      "n": 81,
+      "readable": 81,
+      "review": 0,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "name": "Minified XML (no line breaks or indentation)",
+      "changed": 162,
+      "n": 162,
+      "readable": 162,
+      "review": 0,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "name": "No thousands separators in amounts",
+      "changed": 110,
+      "n": 110,
+      "readable": 81,
+      "review": 29,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    }
+  ],
+  "perturbAll": {
+    "changed": 300,
+    "n": 300,
+    "readable": 271,
+    "review": 29,
+    "accuracy": 1,
+    "falseApprovals": 0,
+    "wronglyPaid": 0,
+    "errors": []
+  },
+  "ablation": [
+    {
+      "name": "Full Wazin",
+      "skip": [],
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    {
+      "name": "Without ZATCA checks",
+      "skip": [
+        "zatca"
+      ],
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 0.8265682656826568,
+      "falseApprovals": 47,
+      "wronglyPaid": 598989.85,
+      "errors": [
+        "WZN-0003 vat_math: expected EXCEPTION, got APPROVED_AUTO []",
+        "WZN-0030 vat_math: expected EXCEPTION, got APPROVED_AUTO []",
+        "WZN-0031 invalid_vat: expected EXCEPTION, got APPROVED_AUTO []",
+        "WZN-0039 invalid_vat: expected EXCEPTION, got APPROVED_AUTO []",
+        "WZN-0047 invalid_vat: expected EXCEPTION, got APPROVED_AUTO []"
+      ]
+    },
+    {
+      "name": "Without bank-account check",
+      "skip": [
+        "bank"
+      ],
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 0.9372693726937269,
+      "falseApprovals": 17,
+      "wronglyPaid": 180752.4,
+      "errors": [
+        "WZN-0010 iban_change: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0025 iban_change: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0046 iban_change: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0058 iban_change: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0072 iban_change: expected BLOCKED, got APPROVED_AUTO []"
+      ]
+    },
+    {
+      "name": "Without duplicate check",
+      "skip": [
+        "duplicate"
+      ],
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 0.9446494464944649,
+      "falseApprovals": 12,
+      "wronglyPaid": 169163.85,
+      "errors": [
+        "WZN-0008 duplicate: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0011 duplicate: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0044 duplicate: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0059 duplicate: expected BLOCKED, got APPROVED_AUTO []",
+        "WZN-0069 duplicate: expected BLOCKED, got APPROVED_AUTO []"
+      ]
+    },
+    {
+      "name": "Without order and delivery match",
+      "skip": [
+        "match"
+      ],
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 0.7638376383763837,
+      "falseApprovals": 64,
+      "wronglyPaid": 807591.6200000002,
+      "errors": [
+        "WZN-0004 price_mismatch: expected EXCEPTION, got APPROVED_AUTO []",
+        "WZN-0005 qty_mismatch: expected EXCEPTION, got APPROVED_AUTO []",
+        "WZN-0013 qty_mismatch: expected EXCEPTION, got APPROVED_AUTO []",
+        "WZN-0015 missing_grn: expected PARKED, got APPROVED_AUTO []",
+        "WZN-0021 price_mismatch: expected EXCEPTION, got APPROVED_AUTO []"
+      ]
+    }
+  ],
+  "adapt": {
+    "twoWay": {
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    },
+    "tolerance20": {
+      "n": 300,
+      "readable": 271,
+      "review": 29,
+      "accuracy": 1,
+      "falseApprovals": 0,
+      "wronglyPaid": 0,
+      "errors": []
+    }
+  }
+}

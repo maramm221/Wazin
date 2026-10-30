@@ -13,7 +13,7 @@ git branch -M main
 git push -u origin main
 ```
 
-GitHub runs the 82 tests automatically on every push (the **Actions** tab shows a green tick).
+GitHub runs the 88 tests automatically on every push (the **Actions** tab shows a green tick).
 
 ## 2. Deploy on Render
 

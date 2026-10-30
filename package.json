@@ -15,6 +15,7 @@
     "eval": "node eval/run.js",
     "eval:llm": "node eval/run.js --llm",
     "stress": "node eval/stress.js",
+    "heldout": "node eval/heldout.js",
     "demo": "node cli.js"
   }
 }

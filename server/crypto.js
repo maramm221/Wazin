@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 // The key comes from WAZIN_DATA_KEY (32 bytes, base64). Associated data binds a value to its
 // organisation and field, so a ciphertext copied into another row or org fails to decrypt.
 
+/** Read the 32-byte data key from base64 (WAZIN_DATA_KEY); refuses anything else. */
 export function loadKey(b64) {
   if (!b64) throw new Error('WAZIN_DATA_KEY is not set');
   const key = Buffer.from(b64, 'base64');
@@ -15,6 +16,7 @@ export function loadKey(b64) {
 
 export const newKey = () => crypto.randomBytes(32).toString('base64');
 
+/** AES-256-GCM. The AAD binds the ciphertext to its company and field, so it cannot be moved elsewhere. */
 export function encrypt(key, plaintext, aad = '') {
   if (plaintext === undefined || plaintext === null) return null;
   const iv = crypto.randomBytes(12);
@@ -24,6 +26,7 @@ export function encrypt(key, plaintext, aad = '') {
   return `v1:${Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64')}`;
 }
 
+/** Reverse of encrypt(); throws if the data or its AAD were changed. */
 export function decrypt(key, value, aad = '') {
   if (value === undefined || value === null) return null;
   if (!String(value).startsWith('v1:')) throw new Error('Unknown ciphertext format');
@@ -37,12 +40,14 @@ export function decrypt(key, value, aad = '') {
 // ---------- Passwords: scrypt with per-user salt ----------
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 
+/** scrypt with a random salt; only the hash is stored. */
 export function hashPassword(password) {
   const salt = crypto.randomBytes(16);
   const hash = crypto.scryptSync(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p });
   return `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString('base64')}$${hash.toString('base64')}`;
 }
 
+/** Constant-time check of a password against a stored scrypt hash. */
 export function verifyPassword(password, stored) {
   try {
     const [alg, N, r, p, saltB64, hashB64] = String(stored).split('$');
@@ -59,6 +64,7 @@ export function verifyPassword(password, stored) {
 // which emails have accounts.
 export const DUMMY_HASH = hashPassword(crypto.randomBytes(16).toString('hex'));
 
+/** Return an error code if a new password is too weak, or null if it is acceptable. */
 export function passwordProblem(pw) {
   if (typeof pw !== 'string' || pw.length < 10) return 'password_too_short';
   if (pw.length > 200) return 'password_too_long';
