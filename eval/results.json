@@ -1,0 +1,183 @@
+{
+  "summary": {
+    "run": {
+      "n": 300,
+      "seed": 2026,
+      "llm": false,
+      "date": "2026-10-30",
+      "node": "v22.23.4"
+    },
+    "formats": {
+      "text": 84,
+      "ubl": 142,
+      "arabic": 46,
+      "email": 28
+    },
+    "defects": {
+      "over_limit": 15,
+      "clean": 121,
+      "price_mismatch": 29,
+      "invalid_vat": 17,
+      "no_po": 21,
+      "vat_math": 18,
+      "qr_tamper": 18,
+      "qty_mismatch": 13,
+      "duplicate": 14,
+      "iban_change": 17,
+      "missing_grn": 17
+    },
+    "readable": 272,
+    "escalated": 28,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "decisionAccuracyByFormat": {
+      "ubl": {
+        "n": 142,
+        "accuracy": 1
+      },
+      "text": {
+        "n": 84,
+        "accuracy": 1
+      },
+      "arabic": {
+        "n": 46,
+        "accuracy": 1
+      },
+      "email": {
+        "n": 0,
+        "accuracy": null
+      }
+    },
+    "falseApprovals": 0,
+    "falseHolds": 0,
+    "perCode": [
+      {
+        "code": "AWAITING_GRN",
+        "support": 13,
+        "tp": 13,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "BANK_DETAILS_CHANGED",
+        "support": 16,
+        "tp": 16,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "DUPLICATE",
+        "support": 14,
+        "tp": 14,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "INVALID_VAT_NUMBER",
+        "support": 15,
+        "tp": 15,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "PO_NOT_FOUND",
+        "support": 19,
+        "tp": 19,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "PRICE_VARIANCE",
+        "support": 28,
+        "tp": 28,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "QR_MISMATCH",
+        "support": 15,
+        "tp": 15,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "QTY_VARIANCE",
+        "support": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "code": "VAT_CALC_ERROR",
+        "support": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      }
+    ],
+    "decisions": {
+      "APPROVAL_REQUIRED": 11,
+      "APPROVED_AUTO": 111,
+      "EXCEPTION": 107,
+      "BLOCKED": 30,
+      "REVIEW": 28,
+      "PARKED": 13
+    },
+    "touchlessRate": 0.37,
+    "touchlessRateOnCleanReadable": 1,
+    "resume": {
+      "parked": 13,
+      "resumed": 13,
+      "clearedAfterGRN": 13
+    },
+    "sarAtRiskCaught": {
+      "duplicates": 154521,
+      "bankDiversion": 194535,
+      "overchargesInclVat": 15327,
+      "total": 364383
+    },
+    "earlyPayDiscountsSAR": 5598,
+    "latencyMs": {
+      "mean": 0.59,
+      "p50": 0.52,
+      "p95": 0.98,
+      "max": 5.13
+    },
+    "compute": {
+      "llmCallsMade": 0,
+      "invoicesNeedingLLM": 28,
+      "wazinTokens": 18497,
+      "wazinTokensNote": "projected: 1 call per free-text invoice (prompt+doc+reply)",
+      "naiveAllLLMTokensEstimate": 2015465,
+      "reductionPct": 99.1
+    }
+  },
+  "errors": []
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Wazin · وازِن",
+  "short_name": "Wazin",
+  "description": "AI agent for supplier invoices: ZATCA checks, three-way match, payment or hand-off.",
+  "start_url": "/#/home",
+  "display": "standalone",
+  "background_color": "#f3f6f3",
+  "theme_color": "#0f1f1a",
+  "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

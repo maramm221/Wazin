@@ -1,0 +1,102 @@
+[
+  {
+    "seed": 1,
+    "readable": 272,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 59,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 2,
+    "readable": 258,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 70,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 3,
+    "readable": 264,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 60,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 4,
+    "readable": 261,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 60,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 5,
+    "readable": 263,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 82,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 6,
+    "readable": 277,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 67,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 7,
+    "readable": 260,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 56,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 8,
+    "readable": 270,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 48,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 9,
+    "readable": 276,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 65,
+    "errors": 0,
+    "sampleErrors": []
+  },
+  {
+    "seed": 10,
+    "readable": 274,
+    "decisionAccuracy": 1,
+    "exactReasonMatch": 1,
+    "falseApprovals": 0,
+    "compound": 55,
+    "errors": 0,
+    "sampleErrors": []
+  }
+]

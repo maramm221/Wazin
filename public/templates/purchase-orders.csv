@@ -1,0 +1,3 @@
+po_number,vendor_vat,buyer,sku,item_name,qty,unit_price
+PO-0001,310122334400003,buyer@yourcompany.com,CHAIR-01,Office chair,10,450.00
+PO-0001,310122334400003,buyer@yourcompany.com,DESK-01,Standing desk,2,1200.00
