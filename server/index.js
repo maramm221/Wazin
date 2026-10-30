@@ -23,7 +23,7 @@ if (!process.env.WAZIN_DATA_KEY) {
 
 const app = createApp({ log });
 const port = Number(process.env.PORT || 3000);
-app.server.listen(port, () => log('info', 'listening', { url: `http://localhost:${port}`, ai: !!app.service.llm, env: production ? 'production' : 'development' }));
+app.ready.then(() => app.server.listen(port, () => log('info', 'listening', { url: `http://localhost:${port}`, ai: !!app.service.llm, env: production ? 'production' : 'development' })));
 
 let closing = false;
 const shutdown = (sig) => {

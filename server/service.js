@@ -7,6 +7,11 @@ import { hashPassword, verifyPassword, passwordProblem, randomToken, DUMMY_HASH 
 import { buildDemo } from '../data/demo.js';
 import { parseCSV } from './csv.js';
 
+const SEED_PEOPLE = {
+  ap: ['ap@sahara.example', 'Reem Al-Qahtani'], finance: ['finance@sahara.example', 'Faisal Al-Harbi'], procurement: ['procurement@sahara.example', 'Sara Al-Otaibi'],
+  warehouse: ['warehouse@sahara.example', 'Omar Al-Ghamdi'], treasury: ['treasury@sahara.example', 'Noura Al-Shehri'], admin: ['admin@sahara.example', 'Khalid Al-Dosari'],
+};
+
 export class AppError extends Error {
   constructor(status, code, detail) {
     super(code);
@@ -25,7 +30,6 @@ const OPEN = ['APPROVAL_REQUIRED', 'PARKED', 'EXCEPTION', 'BLOCKED', 'REVIEW'];
 const FINAL = ['APPROVED_AUTO', 'APPROVED', 'REJECTED', 'CLOSED'];
 const MAX_DOC = 512 * 1024;
 const SESSION_TTL = 12 * 60 * 60 * 1000;
-const SANDBOX_TTL = 24 * 60 * 60 * 1000;
 const LOCK_AFTER = 5;
 const LOCK_MS = 15 * 60 * 1000;
 
@@ -120,7 +124,6 @@ export class Service {
   me(ctx) { return { user: this.publicUser(ctx.user), org: { name: ctx.org.name, kind: ctx.org.kind, approvalLimit: ctx.org.approvalLimit, expiresAt: ctx.org.expiresAt }, csrf: ctx.csrf, ai: !!this.llm }; }
 
   changePassword(ctx, { current, next }) {
-    if (ctx.org.kind === 'sandbox') throw bad('not_in_demo');
     if (!verifyPassword(String(current || ''), ctx.user.pwHash)) throw new AppError(401, 'bad_credentials');
     const p = passwordProblem(next);
     if (p) throw bad(p);
@@ -135,7 +138,6 @@ export class Service {
 
   addUser(ctx, { name, email: em, role }) {
     if (!can(ctx.user)) throw forbidden();
-    if (ctx.org.kind === 'sandbox') throw bad('not_in_demo');
     const n = str(name, 120), e = email(em);
     if (!n) throw bad('name_required');
     if (!ROLES.includes(role)) throw bad('invalid_role');
@@ -166,43 +168,29 @@ export class Service {
     this.s.audit(ctx.org.id, ctx.user.email, 'settings.updated', ctx.org.id, patch);
   }
 
-  // ======================= demo workspaces =======================
-  async createSandbox({ lang = 'en' } = {}) {
-    const demo = buildDemo(1);
-    const extra = buildDemo(2); // orders behind the "try a sample" invoices
-    const org = this.s.createOrg({ name: lang === 'ar' ? 'شركة صحارى للتجزئة (تجريبي)' : 'Sahara Retail Co. (demo)', kind: 'sandbox', approvalLimit: demo.approvalLimit, ttlMs: SANDBOX_TTL });
-    const people = {
-      ap: ['Reem Al-Qahtani', 'ريم القحطاني'], finance: ['Faisal Al-Harbi', 'فيصل الحربي'], procurement: ['Sara Al-Otaibi', 'سارة العتيبي'],
-      warehouse: ['Omar Al-Ghamdi', 'عمر الغامدي'], treasury: ['Noura Al-Shehri', 'نورة الشهري'], admin: ['Khalid Al-Dosari', 'خالد الدوسري'],
-    };
+  // ======================= seeded company =======================
+  /** Create "Sahara Trading Co." with one account per team, its suppliers, orders, receipts and inbox.
+   *  Idempotent: does nothing if the company already exists. Used for reviewers (WAZIN_SEED_PASSWORD). */
+  async seedCompany({ password }) {
+    const p = passwordProblem(password);
+    if (p) throw bad(p);
+    if (this.s.getUserByEmail(SEED_PEOPLE.ap[0])) return null;
+    const data = buildDemo(1);
+    const more = buildDemo(2); // orders for invoices that will arrive later
+    const org = this.s.createOrg({ name: 'Sahara Trading Co.', kind: 'workspace', approvalLimit: data.approvalLimit });
     const users = {};
+    const pw = hashPassword(password);
     this.s.tx(() => {
-      for (const role of ROLES) {
-        // Demo users get a random password nobody knows; they are reached only through "Switch role".
-        users[role] = this.s.createUser({ orgId: org.id, email: `${role}.${org.id.slice(4, 16)}@demo.wazin.invalid`, name: people[role][lang === 'ar' ? 1 : 0], role, pwHash: hashPassword(randomToken(18)) });
+      for (const role of ROLES) users[role] = this.s.createUser({ orgId: org.id, email: SEED_PEOPLE[role][0], name: SEED_PEOPLE[role][1], role, pwHash: pw });
+      for (const v of data.vendors) this.s.upsertVendor(org.id, v);
+      for (const src of [data, more]) {
+        for (const po of src.purchaseOrders) this.s.upsertPO(org.id, { ...po, lines: po.lines.map((l) => ({ sku: l.sku, name: l.name, qty: l.qty, unitPrice: l.unitPrice })) });
+        for (const g of src.goodsReceipts) this.s.addGRN(org.id, g, 'import');
       }
-      for (const v of demo.vendors) this.s.upsertVendor(org.id, v);
-      for (const p of demo.purchaseOrders) this.s.upsertPO(org.id, { ...p, lines: p.lines.map((l) => ({ sku: l.sku, name: l.name, qty: l.qty, unitPrice: l.unitPrice })) });
-      for (const g of demo.goodsReceipts) this.s.addGRN(org.id, g, 'seed');
-      for (const p of extra.purchaseOrders) this.s.upsertPO(org.id, { ...p, lines: p.lines.map((l) => ({ sku: l.sku, name: l.name, qty: l.qty, unitPrice: l.unitPrice })) });
-      for (const g of extra.goodsReceipts) this.s.addGRN(org.id, g, 'seed');
-      this.s.audit(org.id, 'system', 'demo.created', org.id, {});
+      this.s.audit(org.id, 'system', 'company.created', org.id, {});
     });
-    for (const item of demo.inbox) await this.processNew({ user: users.ap, org: this.s.getOrg(org.id) }, item.doc, 'demo');
-    return this.#newSession(users.ap);
-  }
-
-  switchRole(ctx, role) {
-    if (ctx.org.kind !== 'sandbox') throw forbidden();
-    if (!ROLES.includes(role)) throw bad('invalid_role');
-    const u = this.s.listUsers(ctx.org.id).find((x) => x.role === role);
-    if (!u) throw notFound();
-    return this.#newSession(u);
-  }
-
-  sampleInvoices(ctx) {
-    if (ctx.org.kind !== 'sandbox') return [];
-    return buildDemo(2).inbox.map((i) => ({ label: i.label, story: i.story, labelAr: i.labelAr, storyAr: i.storyAr, format: i.format, vendor: i.vendor, vendorAr: i.vendorAr, doc: i.doc }));
+    for (const item of data.inbox) await this.processNew({ user: users.ap, org: this.s.getOrg(org.id) }, item.doc, 'e-invoicing');
+    return org.id;
   }
 
   // ======================= invoices =======================

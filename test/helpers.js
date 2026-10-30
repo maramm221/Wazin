@@ -5,10 +5,14 @@ import path from 'node:path';
 import { createApp } from '../server/app.js';
 import { newKey } from '../server/crypto.js';
 
+export const SEED_PASSWORD = 'Review-2026-ksa';
+export const seedEmail = (role) => `${role}@sahara.example`;
+
 export async function startApp(env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wazin-test-'));
   const dbFile = path.join(dir, 'test.db');
-  const app = createApp({ env: { WAZIN_DATA_KEY: newKey(), WAZIN_DB: dbFile, ...env }, llm: null, log: () => {} });
+  const app = createApp({ env: { WAZIN_DATA_KEY: newKey(), WAZIN_DB: dbFile, WAZIN_SEED_PASSWORD: SEED_PASSWORD, ...env }, llm: null, log: () => {} });
+  await app.ready;
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${app.server.address().port}`;
   return {
@@ -34,7 +38,8 @@ export function client(base) {
     if (json && json.csrf) c.csrf = json.csrf;
     return { status: res.status, body: json, headers: res.headers };
   };
-  c.demo = async () => c.call('POST', '/api/sandbox', { lang: 'en' });
-  c.as = async (role) => c.call('POST', '/api/sandbox/switch', { role });
+  // Sign in to the seeded company as one of its teams.
+  c.as = async (role) => { if (c.cookie) await c.call('POST', '/api/logout', {}); c.cookie = ''; c.csrf = ''; return c.call('POST', '/api/login', { email: seedEmail(role), password: SEED_PASSWORD }); };
+  c.company = async () => c.as('ap');
   return c;
 }

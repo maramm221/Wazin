@@ -61,4 +61,4 @@ Append-only and hash-chained: each entry stores SHA-256 of the previous entry an
 ## Known limits
 - No two-factor sign-in yet (next on the list).
 - Rate limits are per server instance; with several instances, move them to Redis.
-- Demo companies are public by design and deleted after 24 hours.
+- The optional reference company (`WAZIN_SEED_PASSWORD`) holds only fictional data; on the free plan it is rebuilt from scratch whenever the server restarts.

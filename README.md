@@ -42,12 +42,25 @@ You need **Node.js 22.13 or newer** (https://nodejs.org). No other installs, no 
 
 ```bash
 cd wazin
-npm start            # open http://localhost:3000 and press "Try the live demo"
+WAZIN_SEED_PASSWORD="choose-a-password-1" npm start   # open http://localhost:3000 and sign in as ap@sahara.example
 npm test             # 82 automated tests
 npm run eval         # 300-invoice benchmark  -> eval/RESULTS.md
 npm run stress       # 3,000-invoice stress test -> eval/STRESS.md
 npm run demo         # the 13-invoice demo in the terminal, no browser
 ```
+
+### Reference company for reviewers
+
+Set `WAZIN_SEED_PASSWORD` and Wazin opens **Sahara Trading Co.** on start, with its suppliers, purchase orders, goods receipts and 13 supplier invoices already checked. Each team has its own sign-in (all use that password):
+
+| Team | Email |
+|---|---|
+| Accounts Payable | `ap@sahara.example` |
+| Finance Manager | `finance@sahara.example` |
+| Procurement | `procurement@sahara.example` |
+| Warehouse | `warehouse@sahara.example` |
+| Treasury | `treasury@sahara.example` |
+| Administrator | `admin@sahara.example` |
 
 On first start Wazin creates a development encryption key in `var/dev.key` and a database in `var/wazin.db`. In production the key must come from the environment (see [docs/DEPLOY.md](docs/DEPLOY.md)).
 
@@ -75,7 +88,7 @@ See **[docs/SECURITY.md](docs/SECURITY.md)**. In short:
 public/     the web app: plain JavaScript, Arabic/English, mobile first, no build step
 server/     HTTP layer, sessions, roles, encryption, SQLite storage, audit chain
 src/        the agent: reading, ZATCA checks, three-way match, decisions, messages
-data/       the demo company and the labelled benchmark generator
+data/       the reference company (Sahara Trading Co.) and the labelled benchmark generator
 eval/       benchmark and stress test
 test/       82 automated tests
 ```
@@ -104,6 +117,6 @@ The benchmark data is synthetic and labelled, so it proves the rules and routing
 - PDF invoices: paste their text or upload the XML; reading PDF files directly is next.
 - One server instance with SQLite handles thousands of invoices a day. To run several instances, move storage to PostgreSQL and rate limits to Redis; the storage layer is isolated in `server/store.js` for that.
 
-Sources for every fact: [docs/SOURCES.md](docs/SOURCES.md). Demo suppliers, orders and bank accounts are fictional; the rules are real.
+Sources for every fact: [docs/SOURCES.md](docs/SOURCES.md). The reference company, its suppliers, orders and bank accounts are fictional; the rules are real.
 
 MIT licence. © 2026 Maram Talib.

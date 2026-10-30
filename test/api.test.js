@@ -5,10 +5,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { startApp } from './helpers.js';
+import { buildDemo } from '../data/demo.js';
 
-describe('the full hand-off flow in a demo company', () => {
+const laterInvoices = buildDemo(2).inbox; // invoices that arrive after the seeded inbox
+
+describe('the full hand-off flow in a seeded company', () => {
   let t, c;
-  before(async () => { t = await startApp(); c = t.client(); });
+  before(async () => { t = await startApp({ WAZIN_LOGIN_LIMIT: '1000' }); c = t.client(); });
   after(() => t.stop());
 
   test('health check and security headers', async () => {
@@ -26,8 +29,8 @@ describe('the full hand-off flow in a demo company', () => {
     for (const p of ['/api/dashboard', '/api/invoices', '/api/suppliers', '/api/audit']) assert.equal((await c.call('GET', p)).status, 401, p);
   });
 
-  test('demo company: 13 invoices processed, session cookie is HttpOnly + SameSite=Strict', async () => {
-    const r = await c.demo();
+  test('seeded company: 13 invoices processed, session cookie is HttpOnly + SameSite=Strict', async () => {
+    const r = await c.company();
     assert.equal(r.status, 200);
     assert.equal(r.body.user.role, 'ap');
     assert.match(c.lastSetCookie, /HttpOnly/);
@@ -125,16 +128,13 @@ describe('the full hand-off flow in a demo company', () => {
     assert.ok(r.body.result.reasonCodes.includes('QR_MISSING'), 'no QR typed in, so the supplier is asked for a proper e-invoice');
   });
 
-  test('a sample invoice is a fresh case, not a duplicate of the inbox', async () => {
-    const samples = await c.call('GET', '/api/samples');
-    assert.equal(samples.body.length, 13);
-    const r = await c.call('POST', '/api/invoices', { doc: samples.body[0].doc });
+  test('a newly arriving invoice is a fresh case, not a duplicate of the inbox', async () => {
+    const r = await c.call('POST', '/api/invoices', { doc: laterInvoices[0].doc });
     assert.equal(r.body.status, 'APPROVED_AUTO');
   });
 
   test('re-billing the same goods under a new number and date is blocked', async () => {
-    const samples = await c.call('GET', '/api/samples');
-    const doc = samples.body[0].doc.replace(/ALN-25117/g, 'ALN-99001').replace(/2026-10-25/g, '2026-10-29');
+    const doc = laterInvoices[0].doc.replace(/ALN-25117/g, 'ALN-99001').replace(/2026-10-25/g, '2026-10-29');
     const r = await c.call('POST', '/api/invoices', { doc });
     assert.equal(r.body.status, 'BLOCKED');
     assert.deepEqual(r.body.result.reasonCodes, ['ALREADY_INVOICED']);
@@ -192,7 +192,7 @@ describe('the full hand-off flow in a demo company', () => {
 
 describe('accounts, workspaces and limits', () => {
   let t;
-  before(async () => { t = await startApp(); });
+  before(async () => { t = await startApp({ WAZIN_LOGIN_LIMIT: '1000' }); });
   after(() => t.stop());
 
   test('sign-up validates input and creates an empty, isolated workspace', async () => {
@@ -204,9 +204,9 @@ describe('accounts, workspaces and limits', () => {
     assert.equal(r.status, 200);
     assert.equal(r.body.user.role, 'admin');
     assert.equal((await c.call('GET', '/api/invoices')).body.length, 0);
-    // A demo company created by someone else is invisible here.
+    // Another company's invoices are invisible here.
     const other = t.client();
-    await other.demo();
+    await other.company();
     assert.equal((await c.call('GET', '/api/invoices/WZN-00001')).status, 404);
     assert.equal((await c.call('POST', '/api/signup', { company: 'Y', name: 'B', email: 'amal@acme.sa', password: 'correct horse 42' })).status, 409);
   });
@@ -244,16 +244,18 @@ describe('accounts, workspaces and limits', () => {
   });
 
   test('sign-in attempts are rate limited per address', async () => {
-    const c = t.client();
+    const fresh = await startApp(); // default limit: 10 a minute
+    const c = fresh.client();
     let last;
     for (let i = 0; i < 12; i++) last = await c.call('POST', '/api/login', { email: 'x@y.sa', password: 'nope-nope-1' });
     assert.equal(last.status, 429);
     assert.ok(Number(last.headers.get('retry-after')) > 0);
+    await fresh.stop();
   });
 
   test('logout ends the session on the server', async () => {
     const c = t.client();
-    await c.demo();
+    await c.company();
     assert.equal((await c.call('GET', '/api/me')).status, 200);
     await c.call('POST', '/api/logout', {});
     const old = c.cookie;
@@ -264,7 +266,7 @@ describe('accounts, workspaces and limits', () => {
 
 describe('malformed and hostile requests', () => {
   let t, c;
-  before(async () => { t = await startApp(); c = t.client(); await c.demo(); });
+  before(async () => { t = await startApp({ WAZIN_LOGIN_LIMIT: '1000' }); c = t.client(); await c.company(); });
   after(() => t.stop());
 
   test('invalid JSON, wrong content type and oversized bodies are refused cleanly', async () => {

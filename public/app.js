@@ -9,7 +9,7 @@ const store = {
 };
 const state = {
   lang: store.get('wz_lang') || ((navigator.language || '').toLowerCase().startsWith('ar') ? 'ar' : 'en'),
-  me: null, csrf: '', config: { signup: true, demo: true, ai: false },
+  me: null, csrf: '', config: { signup: true, ai: false },
 };
 
 function t(key, vars = {}) {
@@ -176,28 +176,47 @@ function icon(d) {
 function navItems() {
   return NAV.filter(([k]) => k !== 'settings' || state.me.user.role === 'admin');
 }
+// ---------------------------------------------------------------- display preferences (text size, contrast)
+const prefs = { size: Number(store.get('wz_size') || 0), contrast: store.get('wz_contrast') === '1' };
+function applyPrefs() {
+  document.documentElement.dataset.size = String(prefs.size);
+  document.documentElement.dataset.contrast = prefs.contrast ? 'high' : 'normal';
+}
+function setSize(d) { prefs.size = Math.max(-1, Math.min(2, prefs.size + d)); store.set('wz_size', String(prefs.size)); applyPrefs(); }
+function toggleContrast() { prefs.contrast = !prefs.contrast; store.set('wz_contrast', prefs.contrast ? '1' : '0'); applyPrefs(); render(); }
+
+function todayLine() {
+  const d = new Date();
+  try {
+    const hijri = new Intl.DateTimeFormat(isAr() ? 'ar-SA-u-ca-islamic-umalqura-nu-latn' : 'en-GB-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+    const greg = new Intl.DateTimeFormat(isAr() ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+    return `${hijri} · ${greg}`;
+  } catch { return d.toDateString(); }
+}
+
+// Thin bar above every page: date (Hijri and Gregorian), text size, contrast, language.
+function utilityBar() {
+  return h('div', { class: 'util' }, h('div', { class: 'wrap util-in' },
+    h('span', { class: 'util-date', text: todayLine() }),
+    h('div', { class: 'spacer' }),
+    h('div', { class: 'util-tools', role: 'group', 'aria-label': t('a11y_tools') },
+      h('button', { type: 'button', class: 'util-btn', onclick: () => setSize(-1), 'aria-label': t('text_smaller'), text: 'A−' }),
+      h('button', { type: 'button', class: 'util-btn', onclick: () => setSize(1), 'aria-label': t('text_bigger'), text: 'A+' }),
+      h('button', { type: 'button', class: 'util-btn', onclick: toggleContrast, 'aria-pressed': String(prefs.contrast), text: t('contrast') })),
+    langButton()));
+}
+
 function shell(current, main) {
   const { user, org } = state.me;
-  const sandbox = org.kind === 'sandbox';
-  const roleSel = sandbox ? h('label', { class: 'viewas' }, h('span', { text: t('viewing_as') }),
-    h('select', { id: 'viewas', onchange: async (e) => {
-      try {
-        const r = await api('POST', '/api/sandbox/switch', { role: e.target.value });
-        state.csrf = r.csrf;
-        await loadMe();
-        go('#/home');
-        render();
-      } catch (err) { toast(errText(err), 'crit'); }
-    } }, ['ap', 'finance', 'procurement', 'warehouse', 'treasury', 'admin'].map((r) => h('option', { value: r, selected: r === user.role, text: t(`role_${r}`) })))) : h('span', { class: 'who' }, h('b', { text: user.name }), h('span', { text: t(`role_${user.role}`) }));
   const signOut = h('button', { class: 'btn ghost small', type: 'button', onclick: async () => { try { await api('POST', '/api/logout', {}); } catch { /* already gone */ } state.me = null; state.csrf = ''; go('#/welcome'); }, text: t('sign_out') });
+  const who = h('span', { class: 'who' }, h('span', { class: 'avatar', 'aria-hidden': 'true', text: (user.name || '?').trim().charAt(0) }), h('span', { class: 'who-txt' }, h('b', { text: user.name }), h('span', { text: t(`role_${user.role}`) })));
 
   const top = h('header', { class: 'topbar' },
-    h('div', { class: 'topbar-in' },
+    h('div', { class: 'topbar-in wrap' },
       brand(),
-      h('span', { class: 'org' }, org.name, sandbox ? h('span', { class: 'badge', text: t('demo_badge') }) : null),
+      h('span', { class: 'org' }, h('span', { class: 'org-label', text: t('company') }), h('b', { text: org.name })),
       h('div', { class: 'spacer' }),
-      langButton(),
-      h('span', { class: 'hide-sm' }, roleSel),
+      h('span', { class: 'hide-sm' }, who),
       h('span', { class: 'hide-sm' }, signOut)));
 
   const items = navItems();
@@ -207,6 +226,7 @@ function shell(current, main) {
   // Mobile: four main tabs plus "More".
   const moreSheet = h('div', { class: 'sheet', hidden: true, id: 'more' },
     h('div', { class: 'sheet-card' },
+      h('div', { class: 'sheet-who' }, who.cloneNode(true)),
       items.slice(4).map(([k, label, d]) => h('a', { href: `#/${k}`, onclick: () => (moreSheet.hidden = true) }, icon(d), h('span', { text: t(label) }))),
       h('button', { class: 'sheet-signout', type: 'button', onclick: () => signOut.click(), text: t('sign_out') })));
   moreSheet.addEventListener('click', (e) => { if (e.target === moreSheet) moreSheet.hidden = true; });
@@ -214,45 +234,122 @@ function shell(current, main) {
     items.slice(0, 4).map(([k, label, d]) => h('a', { href: `#/${k}`, class: current === k || (k === 'invoices' && current === 'invoice') ? 'active' : '' }, icon(d), h('span', { text: t(label) }))),
     h('button', { type: 'button', class: ['suppliers', 'activity', 'settings'].includes(current) ? 'active' : '', onclick: () => (moreSheet.hidden = !moreSheet.hidden), 'aria-expanded': 'false' }, icon('M4 6h16M4 12h16M4 18h16'), h('span', { text: t('nav_more') })));
 
-  const banner = sandbox ? h('div', { class: 'demo-banner', role: 'note' }, h('div', { class: 'wrap banner-in' }, h('span', { text: t('demo_banner') }), h('span', { class: 'show-sm' }, roleSel.cloneNode(true)))) : null;
-  if (banner) { const sel = banner.querySelector('select'); sel.id = 'viewas_sm'; sel.value = user.role; sel.onchange = roleSel.querySelector('select').onchange; }
-  return h('div', { class: 'layout' }, top, banner, h('div', { class: 'body wrap' }, side, main), bottom, moreSheet,
-    h('footer', { class: 'foot wrap', text: t('footer') }));
+  const crumbs = h('nav', { class: 'crumbs wrap', 'aria-label': t('breadcrumb') },
+    h('a', { href: '#/home', text: t('nav_home') }),
+    current !== 'home' ? h('span', { 'aria-hidden': 'true', text: isAr() ? '‹' : '›' }) : null,
+    current !== 'home' ? h('span', { 'aria-current': 'page', text: t(current === 'invoice' ? 'nav_invoices' : `nav_${current}`) }) : null);
+
+  return h('div', { class: 'layout' }, utilityBar(), top, crumbs, h('div', { class: 'body wrap' }, side, main), bottom, moreSheet, siteFooter(false));
 }
 
-// ---------------------------------------------------------------- public pages
+// ---------------------------------------------------------------- public site
+const scrollTo = (id) => (e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+
+function siteFooter(full) {
+  const bottom = h('div', { class: 'foot-bottom wrap' },
+    h('span', { text: t('foot_rights') }),
+    h('span', { text: t('foot_independent') }));
+  if (!full) return h('footer', { class: 'site-foot slim' }, bottom);
+  const col = (title, ...items) => h('div', { class: 'foot-col' }, h('h2', { text: title }), h('ul', {}, items.map((x) => h('li', {}, x))));
+  return h('footer', { class: 'site-foot' },
+    h('div', { class: 'foot-cols wrap' },
+      h('div', { class: 'foot-col foot-brand' }, h('span', { class: 'brand on-dark' }, mark(), h('span', { class: 'brand-name' }, h('b', { text: 'Wazin' }), h('span', { class: 'brand-ar', lang: 'ar', text: 'وازِن' }))), h('p', { text: t('foot_about') })),
+      col(t('foot_service'),
+        h('a', { href: '#how', onclick: scrollTo('how'), text: t('pub_nav_how') }),
+        h('a', { href: '#why', onclick: scrollTo('why'), text: t('pub_nav_why') }),
+        h('a', { href: '#teams', onclick: scrollTo('teams'), text: t('pub_nav_teams') }),
+        h('a', { href: '#trust', onclick: scrollTo('trust'), text: t('pub_nav_trust') })),
+      col(t('foot_account'),
+        h('a', { href: '#/signin', text: t('sign_in') }),
+        state.config.signup ? h('a', { href: '#/signup', text: t('create_workspace') }) : null),
+      col(t('foot_compliance'), t('foot_c1'), t('foot_c2'), t('foot_c3'))),
+    bottom);
+}
+
 function publicFrame(...content) {
+  const nav = h('nav', { class: 'pub-nav hide-sm', 'aria-label': 'Main' },
+    h('a', { href: '#how', onclick: (e) => { if (route().page !== 'welcome') return; scrollTo('how')(e); }, text: t('pub_nav_how') }),
+    h('a', { href: '#why', onclick: (e) => { if (route().page !== 'welcome') return; scrollTo('why')(e); }, text: t('pub_nav_why') }),
+    h('a', { href: '#teams', onclick: (e) => { if (route().page !== 'welcome') return; scrollTo('teams')(e); }, text: t('pub_nav_teams') }),
+    h('a', { href: '#trust', onclick: (e) => { if (route().page !== 'welcome') return; scrollTo('trust')(e); }, text: t('pub_nav_trust') }));
+  nav.querySelectorAll('a').forEach((a) => { if (route().page !== 'welcome') a.setAttribute('href', '#/welcome'); });
   return h('div', { class: 'public' },
-    h('header', { class: 'pub-top wrap' }, h('a', { href: '#/welcome', class: 'brand' }, mark(), h('span', { class: 'brand-name' }, h('b', { text: 'Wazin' }), h('span', { class: 'brand-ar', lang: 'ar', text: 'وازِن' }))), h('div', { class: 'spacer' }), langButton()),
-    h('main', { id: 'main', tabindex: '-1', class: 'pub-main wrap' }, ...content),
-    h('footer', { class: 'foot wrap', text: t('footer') }));
+    utilityBar(),
+    h('header', { class: 'pub-top' }, h('div', { class: 'wrap pub-top-in' },
+      h('a', { href: '#/welcome', class: 'brand' }, mark(), h('span', { class: 'brand-name' }, h('b', { text: 'Wazin' }), h('span', { class: 'brand-ar', lang: 'ar', text: 'وازِن' }))),
+      nav, h('div', { class: 'spacer' }),
+      h('a', { class: 'btn small', href: '#/signin', text: t('sign_in') }),
+      state.config.signup ? h('a', { class: 'btn primary small hide-xs', href: '#/signup', text: t('open_account') }) : null)),
+    h('main', { id: 'main', tabindex: '-1', class: 'pub-main' }, ...content),
+    siteFooter(true));
 }
 
 function pageWelcome() {
-  const demoBtn = h('button', { class: 'btn primary big', type: 'button' }, t('try_demo'));
-  const status = h('p', { class: 'muted small', role: 'status' }, t('try_demo_note'));
-  demoBtn.onclick = async () => {
-    demoBtn.disabled = true;
-    status.textContent = t('creating_demo');
-    try {
-      const r = await api('POST', '/api/sandbox', { lang: state.lang });
-      state.csrf = r.csrf;
-      await loadMe();
-      go('#/home');
-    } catch (e) {
-      status.textContent = errText(e);
-      demoBtn.disabled = false;
-    }
-  };
-  const steps = [1, 2, 3].map((n) => h('li', { class: 'how' }, h('span', { class: 'how-n', text: String(n) }), h('div', {}, h('h3', { text: t(`how_${n}_t`) }), h('p', { text: t(`how_${n}_d`) }))));
-  return publicFrame(
-    h('section', { class: 'hero' },
-      h('h1', { text: t('welcome_title') }),
-      h('p', { class: 'lead', text: t('welcome_lead') }),
-      h('div', { class: 'cta' }, state.config.demo ? demoBtn : null, h('a', { class: 'btn big', href: '#/signin', text: t('sign_in') })),
-      state.config.demo ? status : null),
-    h('ol', { class: 'hows' }, steps),
-    state.config.signup ? h('p', { class: 'center' }, t('no_account'), ' ', h('a', { href: '#/signup', text: t('create_workspace') })) : null);
+  const img = (src, alt = '') => h('img', { src, alt, width: 64, height: 64, loading: 'lazy', decoding: 'async' });
+
+  // Hero, with a preview of how one invoice is checked.
+  const check = (ok, label) => h('li', { class: ok ? 'ok' : 'stop' }, h('span', { class: 'pv-dot', 'aria-hidden': 'true', text: ok ? '✓' : '!' }), h('span', { text: label }));
+  const preview = h('figure', { class: 'preview', 'aria-label': t('pv_label') },
+    h('div', { class: 'pv-head' }, h('b', { text: t('pv_supplier') }), h('span', { class: 'num', text: 'SAR 12,995.00' })),
+    h('p', { class: 'pv-sub', text: t('pv_sub') }),
+    h('ul', { class: 'pv-checks' }, check(true, t('pv_c1')), check(true, t('pv_c2')), check(true, t('pv_c3')), check(true, t('pv_c4')), check(false, t('pv_c5'))),
+    h('div', { class: 'pv-verdict' }, h('span', { class: 'pill tone-crit', text: t('st_BLOCKED') }), h('span', { text: t('pv_to') })));
+  const hero = h('section', { class: 'hero-band' }, h('div', { class: 'wrap hero-grid' },
+    h('div', { class: 'hero' },
+      h('p', { class: 'eyebrow', text: t('hero_eyebrow') }),
+      h('h1', { text: t('hero_title') }),
+      h('p', { class: 'lead', text: t('hero_lead') }),
+      h('div', { class: 'cta' },
+        state.config.signup ? h('a', { class: 'btn primary big', href: '#/signup', text: t('open_account') }) : null,
+        h('a', { class: 'btn big', href: '#/signin', text: t('sign_in') })),
+      h('ul', { class: 'trust-row' }, ['trust_1', 'trust_2', 'trust_3'].map((k) => h('li', { text: t(k) })))),
+    preview));
+
+  // Why it is needed: local evidence, each with its source.
+  const why = h('section', { class: 'band', id: 'why', 'aria-labelledby': 'why_h' }, h('div', { class: 'wrap' },
+    h('p', { class: 'eyebrow', text: t('why_eyebrow') }),
+    h('h2', { id: 'why_h', class: 'band-title', text: t('why_title') }),
+    h('p', { class: 'band-lead', text: t('why_lead') }),
+    h('div', { class: 'evidence' }, [1, 2, 3, 4, 5].map((n) => h('article', { class: 'ev' },
+      h('p', { class: 'ev-fig', text: t(`ev${n}_fig`) }),
+      h('h3', { text: t(`ev${n}_t`) }),
+      h('p', { text: t(`ev${n}_d`) }),
+      h('p', { class: 'ev-src', text: t(`ev${n}_src`) }))))));
+
+  // How it works: five steps.
+  const icons = ['1-read', '2-check', '3-weigh', '4-act', '5-follow-up'];
+  const how = h('section', { class: 'band alt', id: 'how', 'aria-labelledby': 'how_h' }, h('div', { class: 'wrap' },
+    h('p', { class: 'eyebrow', text: t('how_eyebrow') }),
+    h('h2', { id: 'how_h', class: 'band-title', text: t('how_title') }),
+    h('ol', { class: 'steps5' }, icons.map((ic, i) => h('li', {},
+      img(`/img/${ic}.svg`),
+      h('span', { class: 'step-n', text: String(i + 1) }),
+      h('h3', { text: t(`s${i + 1}_t`) }),
+      h('p', { text: t(`s${i + 1}_d`) }))))));
+
+  // Who it is for: the six teams.
+  const teamIcon = { ap: 'M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8', finance: 'M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6', procurement: 'M3 3h2l2.5 12h11L21 7H6.5M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', warehouse: 'M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10', treasury: 'M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18M12 3l9 5H3z', admin: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' };
+  const teams = h('section', { class: 'band', id: 'teams', 'aria-labelledby': 'teams_h' }, h('div', { class: 'wrap' },
+    h('p', { class: 'eyebrow', text: t('teams_eyebrow') }),
+    h('h2', { id: 'teams_h', class: 'band-title', text: t('teams_title') }),
+    h('p', { class: 'band-lead', text: t('teams_lead') }),
+    h('div', { class: 'team-grid' }, ['ap', 'finance', 'procurement', 'warehouse', 'treasury', 'admin'].map((r) => h('article', { class: 'team-card' },
+      h('span', { class: 'team-ico' }, icon(teamIcon[r])),
+      h('h3', { text: t(`role_${r}`) }),
+      h('p', { text: t(`team_${r}`) }))))));
+
+  // Trust and compliance.
+  const trust = h('section', { class: 'band alt', id: 'trust', 'aria-labelledby': 'trust_h' }, h('div', { class: 'wrap trust-grid' },
+    h('div', {}, h('p', { class: 'eyebrow', text: t('trust_eyebrow') }), h('h2', { id: 'trust_h', class: 'band-title', text: t('trust_title') }), h('p', { class: 'band-lead', text: t('trust_lead') })),
+    h('ul', { class: 'trust-list' }, [1, 2, 3, 4, 5].map((n) => h('li', {}, h('b', { text: t(`tr${n}_t`) }), h('span', { text: t(`tr${n}_d`) }))))));
+
+  const closing = h('section', { class: 'cta-band' }, h('div', { class: 'wrap cta-band-in' },
+    h('div', {}, h('h2', { text: t('cta_title') }), h('p', { text: t('cta_lead') })),
+    h('div', { class: 'cta' },
+      state.config.signup ? h('a', { class: 'btn primary big', href: '#/signup', text: t('open_account') }) : null,
+      h('a', { class: 'btn big on-dark', href: '#/signin', text: t('sign_in') }))));
+
+  return publicFrame(hero, why, how, teams, trust, closing);
 }
 
 function formField(label, input, help) {
@@ -572,14 +669,9 @@ async function pageNew() {
     } catch (x) { showErr(err, x); btn.disabled = false; status.textContent = ''; }
   };
   const canUpload = ['ap', 'admin'].includes(state.me.user.role);
-  let samples = [];
-  if (state.me.org.kind === 'sandbox') { try { samples = await api('GET', '/api/samples'); } catch { /* optional */ } }
   return h('div', { class: 'stack' },
     h('div', { class: 'page-head' }, h('h1', { text: t('new_title') }), h('p', { class: 'muted', text: t('new_lead') })),
-    canUpload ? form : h('p', { class: 'card muted-card', text: t('e_forbidden') }),
-    canUpload && samples.length ? h('section', { class: 'card' }, h('h2', { text: t('samples') }),
-      h('ul', { class: 'samples' }, samples.map((s) => h('li', {}, h('div', {}, h('b', { text: `${pick(s.vendor, s.vendorAr)} · ${pick(s.label, s.labelAr)}` }), h('p', { class: 'muted small', text: pick(s.story, s.storyAr) })),
-        h('button', { class: 'btn small', type: 'button', onclick: () => { ta.value = s.doc; ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); ta.focus(); }, text: t('use_sample') }))))) : null);
+    canUpload ? form : h('p', { class: 'card muted-card', text: t('e_forbidden') }));
 }
 
 // ---------------------------------------------------------------- orders
@@ -679,7 +771,6 @@ async function pageActivity() {
 // ---------------------------------------------------------------- settings
 async function pageSettings() {
   if (state.me.user.role !== 'admin') return h('p', { class: 'card muted-card', text: t('e_forbidden') });
-  const sandbox = state.me.org.kind === 'sandbox';
   const users = await api('GET', '/api/users');
 
   const coErr = formError();
@@ -692,15 +783,15 @@ async function pageSettings() {
   const uName = h('input', { type: 'text', maxlength: 120 }), uEmail = h('input', { type: 'email', maxlength: 254 });
   const uRole = h('select', {}, ['ap', 'finance', 'procurement', 'warehouse', 'treasury', 'admin'].map((r) => h('option', { value: r, text: t(`role_${r}`) })));
   const secret = h('p', { class: 'secret', hidden: true, role: 'status' });
-  const uForm = h('form', { class: 'action-form', novalidate: true }, h('div', { class: 'grid3' }, formField(t('full_name'), uName), formField(t('email'), uEmail), formField(t('role'), uRole)), uErr, h('button', { class: 'btn', type: 'submit', disabled: sandbox, text: t('add_person') }), secret);
+  const uForm = h('form', { class: 'action-form', novalidate: true }, h('div', { class: 'grid3' }, formField(t('full_name'), uName), formField(t('email'), uEmail), formField(t('role'), uRole)), uErr, h('button', { class: 'btn', type: 'submit', text: t('add_person') }), secret);
   uForm.onsubmit = async (e) => {
     e.preventDefault(); uErr.hidden = true;
     try { const r = await api('POST', '/api/users', { name: uName.value, email: uEmail.value, role: uRole.value }); secret.textContent = `${t('temp_password', { email: r.user.email })} ${r.temporaryPassword}`; secret.hidden = false; uName.value = uEmail.value = ''; }
     catch (x) { showErr(uErr, x); }
   };
-  const team = h('section', { class: 'card' }, h('h2', { text: t('team') }), sandbox ? h('p', { class: 'muted small', text: t('demo_settings_note') }) : null,
+  const team = h('section', { class: 'card' }, h('h2', { text: t('team') }),
     h('ul', { class: 'people' }, users.map((u) => h('li', {}, h('div', {}, h('b', { text: u.name }), h('p', { class: 'muted small', text: `${u.email} · ${t(`role_${u.role}`)}` })),
-      !sandbox && u.id !== state.me.user.id ? h('button', { class: 'btn small danger-ghost', type: 'button', onclick: async () => { try { await api('POST', `/api/users/${encodeURIComponent(u.id)}/remove`, {}); render(); } catch (x) { toast(errText(x), 'crit'); } }, text: t('remove') }) : null))),
+      u.id !== state.me.user.id ? h('button', { class: 'btn small danger-ghost', type: 'button', onclick: async () => { try { await api('POST', `/api/users/${encodeURIComponent(u.id)}/remove`, {}); render(); } catch (x) { toast(errText(x), 'crit'); } }, text: t('remove') }) : null))),
     uForm);
 
   const imp = (kind, label, tpl) => {
@@ -728,7 +819,7 @@ async function pageSettings() {
 
   const pErr = formError();
   const cur = h('input', { type: 'password', autocomplete: 'current-password' }), nxt = h('input', { type: 'password', autocomplete: 'new-password' });
-  const pForm = h('form', { class: 'card form', novalidate: true }, h('h2', { text: t('change_password') }), formField(t('current_password'), cur), formField(t('new_password'), nxt, t('password_rule')), pErr, h('button', { class: 'btn', type: 'submit', disabled: sandbox, text: t('save') }));
+  const pForm = h('form', { class: 'card form', novalidate: true }, h('h2', { text: t('change_password') }), formField(t('current_password'), cur), formField(t('new_password'), nxt, t('password_rule')), pErr, h('button', { class: 'btn', type: 'submit', text: t('save') }));
   pForm.onsubmit = async (e) => { e.preventDefault(); pErr.hidden = true; try { await api('POST', '/api/me/password', { current: cur.value, next: nxt.value }); cur.value = nxt.value = ''; toast(t('saved')); } catch (x) { showErr(pErr, x); } };
 
   return h('div', { class: 'stack' }, h('div', { class: 'page-head' }, h('h1', { text: t('settings_title') })), coForm, team, imports, pForm);
@@ -736,6 +827,7 @@ async function pageSettings() {
 
 // ---------------------------------------------------------------- boot
 (async function boot() {
+  applyPrefs();
   applyLang();
   try { state.config = await api('GET', '/api/config'); } catch { /* defaults */ }
   render();

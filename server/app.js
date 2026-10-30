@@ -66,7 +66,6 @@ export function createApp(opts = {}) {
   const secureCookies = env.WAZIN_SECURE_COOKIES ? env.WAZIN_SECURE_COOKIES === '1' : production;
   const trustProxy = env.WAZIN_TRUST_PROXY === '1' || production;
   const allowSignup = env.WAZIN_ALLOW_SIGNUP !== '0';
-  const allowSandbox = env.WAZIN_ALLOW_SANDBOX !== '0';
 
   const ip = (req) => (trustProxy && req.headers['x-forwarded-for'] ? String(req.headers['x-forwarded-for']).split(',')[0].trim() : req.socket.remoteAddress) || 'unknown';
 
@@ -149,14 +148,7 @@ export function createApp(opts = {}) {
   };
 
   route('GET', '/healthz', () => ({ ok: true }), { auth: false });
-  route('GET', '/api/config', () => ({ signup: allowSignup, demo: allowSandbox, ai: !!llm }), { auth: false });
-
-  route('POST', '/api/sandbox', async (ctx, req, p, body, res) => {
-    if (!allowSandbox) throw new AppError(404, 'not_found');
-    const s = await service.createSandbox({ lang: body.lang === 'ar' ? 'ar' : 'en' });
-    setSession(res, s.token);
-    return { user: s.user, csrf: s.csrf };
-  }, { auth: false, limit: ['sandbox', 20, 3600e3] });
+  route('GET', '/api/config', () => ({ signup: allowSignup, ai: !!llm }), { auth: false });
 
   route('POST', '/api/signup', (ctx, req, p, body, res) => {
     if (!allowSignup) throw new AppError(404, 'not_found');
@@ -169,7 +161,7 @@ export function createApp(opts = {}) {
     const s = service.login(body);
     setSession(res, s.token);
     return { user: s.user, csrf: s.csrf };
-  }, { auth: false, limit: ['login', 10, 60e3] });
+  }, { auth: false, limit: ['login', Number(env.WAZIN_LOGIN_LIMIT) || 10, 60e3] });
 
   route('POST', '/api/logout', (ctx, req, p, b, res) => {
     service.logout(ctx.token);
@@ -179,13 +171,6 @@ export function createApp(opts = {}) {
 
   route('GET', '/api/me', (ctx) => service.me(ctx));
   route('POST', '/api/me/password', (ctx, r, p, b) => (service.changePassword(ctx, b), { ok: true }));
-  route('POST', '/api/sandbox/switch', (ctx, req, p, body, res) => {
-    const s = service.switchRole(ctx, body.role);
-    service.logout(ctx.token);
-    setSession(res, s.token);
-    return { user: s.user, csrf: s.csrf };
-  });
-  route('GET', '/api/samples', (ctx) => service.sampleInvoices(ctx));
   route('GET', '/api/dashboard', (ctx) => service.dashboard(ctx));
   route('GET', '/api/invoices', (ctx, req) => service.list(ctx, Object.fromEntries(new URL(req.url, 'http://x').searchParams)));
   route('POST', '/api/invoices', (ctx, r, p, b) => service.processNew(ctx, b.doc, 'upload'), { limit: ['upload', 60, 60e3] });
@@ -278,7 +263,7 @@ export function createApp(opts = {}) {
   server.requestTimeout = 30000;
   server.keepAliveTimeout = 5000;
 
-  // Housekeeping: expired sessions and demo workspaces.
+  // Housekeeping: expired sessions and expired temporary workspaces.
   const sweep = () => {
     try {
       const s = store.deleteExpiredSessions(), d = store.deleteExpiredSandboxes();
@@ -288,8 +273,13 @@ export function createApp(opts = {}) {
   const timer = setInterval(sweep, 15 * 60e3);
   timer.unref();
 
+  // Optional: a ready-made company with one account per team, for reviewers (WAZIN_SEED_PASSWORD).
+  const ready = env.WAZIN_SEED_PASSWORD
+    ? service.seedCompany({ password: env.WAZIN_SEED_PASSWORD }).then((r) => { if (r) log('info', 'seeded_company', { org: r }); }).catch((e) => log('error', 'seed_failed', { err: e.message }))
+    : Promise.resolve();
+
   return {
-    server, store, service, log,
+    server, store, service, log, ready,
     close: () => new Promise((resolve) => { clearInterval(timer); server.close(() => { try { db.close(); } catch {} resolve(); }); }),
   };
 }

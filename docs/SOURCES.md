@@ -51,3 +51,24 @@ Every external fact used in the README, slides, demo and submission, with where 
 | Render free web services sleep after 15 minutes idle, wake in about a minute, cannot use persistent disks | [Render: Deploy for free](https://render.com/docs/free) |
 | Saudi PDPL in force 14 Sep 2023, fully enforceable by SDAIA from 14 Sep 2024; safeguards for transfers abroad | [Clyde & Co](https://www.clydeco.com/en/insights/2024/09/saudi-arabia-s-personal-data-protection-law-become) |
 | "Sanad Mohammed bin Salman" is a national social-support programme launched 30 Dec 2018 (why the project was renamed) | [Saudipedia](https://saudipedia.com/سند-محمد-بن-سلمان) |
+
+## Local evidence on the website ("Why it is needed")
+
+| Fact | Source |
+|---|---|
+| 2018 royal decree ordered an inventory of overdue payments to private-sector firms | [Arabian Business, 13 Feb 2018](https://arabianbusiness.com/politics-economics/389778-saudi-orders-inventory-of-delayed-payments-to-private-sector) |
+| Ministry of Finance: 99% of contractor payment orders paid within 60 days (2019) | [SPA via EFG Hermes, 22 Jan 2019](https://www.efghermesone.com/News/Index/saudi-government-says-99-of-private-sector-contractors-paid-within-60-days) |
+| 2015 attempt to divert an Aramco payment to a new bank account through a look-alike supplier email; Aramco said no financial impact | [Arab News, 20 Oct 2015](https://www.arabnews.com/node/823001) |
+| E-invoicing fines: SAR 5,000 for not issuing, SAR 10,000 for deleting or amending | [ZATCA, 16 Nov 2021](https://zatca.gov.sa/en/MediaCenter/News/Pages/E-invoicing-Violations-Fines.aspx) |
+| Input VAT may be deducted only with a valid tax invoice | [ZATCA, VAT Input Tax Deduction Guideline, 3rd ed., May 2026](https://zatca.gov.sa/en/HelpCenter/guidelines/Documents/Guideline-on-Input-Tax-Deduction-under-VAT-Provisions.pdf) |
+| Middle East average days sales outstanding 81.1 (2024) | PwC Middle East Working Capital Study 2025, cited in [Qoyod, June 2026](https://www.qoyod.com/en/reports/payment-collection-saudi/) |
+| Layout inspiration: Saudi Platforms Code (unified government interface framework) | [Arab News, 18 Nov 2024](https://arabnews.com/node/2579757) |
+
+## Related work (existing AP automation)
+
+| Product | Source |
+|---|---|
+| Vic.ai: AI extracts, codes and approves invoices | [vic.ai](https://www.vic.ai/products/invoice-autonomy) |
+| Stampli Billy: AI operating procure-to-pay | [Stampli, 13 Nov 2025](https://www.stampli.com/blog/all/billy-the-bot-is-now-simply-billy-the-ai-employee-operating-procure-to-pay/) |
+| Medius AI workmate for accounts payable | [PR Newswire, 30 Nov 2023](https://prnewswire.com/news-releases/medius-to-release-first-ai-workmate-for-the-accounts-payable-industry-302001724.html) |
+| ZATCA Phase 2 tools focus on outgoing invoices (example) | [Ecosire NetSuite module](https://ecosire.com/ar/apps/netsuite/netsuite-ksa-zatca-einvoicing) |

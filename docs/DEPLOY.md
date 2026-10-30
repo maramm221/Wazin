@@ -21,7 +21,7 @@ GitHub runs the 82 tests automatically on every push (the **Actions** tab shows 
 2. Choose your `wazin` repository. Render reads `render.yaml` and shows one web service called **wazin**.
 3. It asks for `ANTHROPIC_API_KEY`. Leave it empty unless you have one (then free-text email invoices are read by AI).
 4. Click **Apply**. The first build takes 2–3 minutes.
-5. Open the URL Render gives you, for example `https://wazin.onrender.com`. Press **Try the live demo**.
+5. Open the URL Render gives you, for example `https://wazin.onrender.com`. Sign in, or open a company account.
 
 That URL is the working-application link for your submission.
 
@@ -30,7 +30,7 @@ Render generates `WAZIN_DATA_KEY`, the encryption key, automatically (a random 2
 ## 3. Before judging
 
 - The free plan **sleeps after 15 minutes** without visitors and takes about a minute to wake. Open the link yourself a few minutes before anyone looks at it, or upgrade the service to a paid plan for the judging week.
-- The free plan's disk is **temporary**. Demo companies are created fresh for every visitor, so the demo is unaffected. Real company workspaces would be lost on restart. For real use: choose a paid plan, uncomment the `disk` block in `render.yaml`, and set `WAZIN_DB=/var/data/wazin.db`.
+- The free plan's disk is **temporary**. The reference company is rebuilt on every start, so it is unaffected. Real company workspaces would be lost on restart. For real use: choose a paid plan, uncomment the `disk` block in `render.yaml`, and set `WAZIN_DB=/var/data/wazin.db`.
 
 ## Settings (environment variables)
 
@@ -43,7 +43,7 @@ Render generates `WAZIN_DATA_KEY`, the encryption key, automatically (a random 2
 | `ANTHROPIC_API_KEY` | no | Turns on AI reading of free-text invoices. |
 | `WAZIN_MODEL` | no | Model id for that reading. |
 | `WAZIN_ALLOW_SIGNUP` | no | `0` hides "Create a company workspace". |
-| `WAZIN_ALLOW_SANDBOX` | no | `0` hides the public demo. |
+| `WAZIN_SEED_PASSWORD` | no | Opens the reference company "Sahara Trading Co." with one sign-in per team (see README). At least 10 characters. |
 | `LOG_LEVEL` | no | `info` (default), `warn`, `error`. |
 
 ## Any other host (Docker)

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><rect width="512" height="512" rx="112" fill="#0F1F1A"/><rect x="24" y="24" width="464" height="464" rx="92" fill="#183229"/>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M166 104h140l60 60v224a20 20 0 0 1-20 20H166a20 20 0 0 1-20-20V124a20 20 0 0 1 20-20z" stroke="#F3F5F1" stroke-width="20"/>
+<path d="M306 104v60h60" stroke="#F3F5F1" stroke-width="20"/>
+<path d="M186 318h140M186 358h96" stroke="#7FD3AE" stroke-width="16"/>
+<path d="M108 262h296" stroke="#2FA37A" stroke-width="18"/>
+</g>
+<text x="214" y="236" text-anchor="middle" font-family="Noto Sans Arabic, Noto Naskh Arabic, DejaVu Sans, sans-serif" font-size="78" font-weight="700" fill="#7FD3AE">ع</text>
+<text x="292" y="230" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="70" font-weight="700" fill="#F3F5F1">A</text>
+</svg>

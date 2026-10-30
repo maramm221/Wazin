@@ -19,6 +19,8 @@ services:
         generateValue: true   # random base64-encoded 256-bit key = exactly what AES-256 needs
       - key: WAZIN_DB
         value: ./var/wazin.db  # with a paid plan + disk use /var/data/wazin.db
+      - key: WAZIN_SEED_PASSWORD
+        sync: false           # optional: opens "Sahara Trading Co." with one sign-in per team, for reviewers
       - key: ANTHROPIC_API_KEY
         sync: false           # optional: lets Wazin read free-text email invoices with AI
     # disk:
