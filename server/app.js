@@ -153,7 +153,8 @@ export function createApp(opts = {}) {
   };
 
   route('GET', '/healthz', () => ({ ok: true }), { auth: false });
-  route('GET', '/api/config', () => ({ signup: allowSignup, ai: !!llm }), { auth: false });
+  const supportEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(env.WAZIN_SUPPORT_EMAIL || '') ? env.WAZIN_SUPPORT_EMAIL : null;
+  route('GET', '/api/config', () => ({ signup: allowSignup, ai: !!llm, support: supportEmail }), { auth: false });
 
   route('POST', '/api/signup', (ctx, req, p, body, res) => {
     if (!allowSignup) throw new AppError(404, 'not_found');
@@ -176,6 +177,9 @@ export function createApp(opts = {}) {
 
   route('GET', '/api/me', (ctx) => service.me(ctx));
   route('POST', '/api/me/password', (ctx, r, p, b) => (service.changePassword(ctx, b), { ok: true }));
+  route('POST', '/api/me/profile', (ctx, r, p, b) => (service.updateProfile(ctx, b), service.me(service.authenticate(ctx.token))));
+  route('GET', '/api/me/activity', (ctx) => service.myActivity(ctx));
+  route('POST', '/api/me/sign-out-others', (ctx) => service.signOutOtherDevices(ctx));
   route('GET', '/api/dashboard', (ctx) => service.dashboard(ctx));
   route('GET', '/api/invoices', (ctx, req) => service.list(ctx, Object.fromEntries(new URL(req.url, 'http://x').searchParams)));
   route('POST', '/api/invoices', (ctx, r, p, b) => service.processNew(ctx, b.doc, 'upload'), { limit: ['upload', 60, 60e3] });

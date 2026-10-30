@@ -21,6 +21,8 @@ services:
         value: ./var/wazin.db  # with a paid plan + disk use /var/data/wazin.db
       - key: WAZIN_SEED_PASSWORD
         sync: false           # optional: opens "Sahara Trading Co." with one sign-in per team, for reviewers
+      - key: WAZIN_SUPPORT_EMAIL
+        sync: false           # optional: the address shown on the Help & contact page
       - key: ANTHROPIC_API_KEY
         sync: false           # optional: lets Wazin read free-text email invoices with AI
     # disk:

@@ -563,6 +563,39 @@ export class Service {
     for (const u of this.s.listUsers(ctx.org.id)) m[u.email] = u.name;
     return m;
   }
+  // ======================= my profile =======================
+  updateProfile(ctx, { name }) {
+    const n = str(name, 120);
+    if (!n) throw bad('name_required');
+    this.s.setName(ctx.user.id, n);
+    this.s.audit(ctx.org.id, ctx.user.email, 'profile.updated', ctx.user.id, {});
+  }
+
+  /** What the signed-in person needs about their own account: their open tasks, their recent actions,
+   *  when they last signed in, failed attempts since then, and how many devices are signed in. */
+  myActivity(ctx) {
+    const mine = this.s.listAudit(ctx.org.id, { actor: ctx.user.email, limit: 300 });
+    const logins = mine.filter((e) => e.action === 'login');
+    const previous = logins[1]?.ts ?? null; // [0] is this session's sign-in
+    const failed = mine.filter((e) => e.action === 'login.failed' && (!logins[0] || e.ts > (previous ?? 0)) && e.ts < (logins[0]?.ts ?? Infinity)).length;
+    const work = mine.filter((e) => !e.action.startsWith('login'));
+    const since = Date.now() - 30 * 24 * 3600e3;
+    return {
+      openTasks: this.dashboard(ctx).myTasks.length,
+      actions30d: work.filter((e) => e.ts >= since).length,
+      previousSignIn: previous,
+      failedSincePrevious: failed,
+      devices: this.s.countSessions(ctx.user.id),
+      recent: work.slice(0, 12).map((e) => ({ ts: e.ts, action: e.action, target: e.target })),
+    };
+  }
+
+  signOutOtherDevices(ctx) {
+    const n = this.s.deleteOtherSessions(ctx.user.id, ctx.token);
+    this.s.audit(ctx.org.id, ctx.user.email, 'sessions.revoked', ctx.user.id, { count: n });
+    return { signedOut: n };
+  }
+
   auditLog(ctx) {
     const names = this.#names(ctx);
     const entries = this.s.listAudit(ctx.org.id, { limit: 300 }).map((e) => ({ ...e, actorName: names[e.actor] || e.actor }));

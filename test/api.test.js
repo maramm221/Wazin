@@ -253,7 +253,7 @@ describe('accounts, workspaces and limits', () => {
     await fresh.stop();
   });
 
-  test('logout ends the session on the server', async () => {
+  test('logout ends the session on the server; "sign out on other devices" ends the others; profile name and activity', async () => {
     const c = t.client();
     await c.company();
     assert.equal((await c.call('GET', '/api/me')).status, 200);
@@ -261,6 +261,19 @@ describe('accounts, workspaces and limits', () => {
     const old = c.cookie;
     c.cookie = old;
     assert.equal((await c.call('GET', '/api/me')).status, 401);
+    // Two devices for the same person; one signs the other out.
+    const phone = t.client(), laptop = t.client();
+    await phone.as('procurement'); await laptop.as('procurement');
+    assert.equal((await laptop.call('GET', '/api/me/activity')).body.devices, 2);
+    assert.equal((await laptop.call('POST', '/api/me/sign-out-others', {})).body.signedOut, 1);
+    assert.equal((await phone.call('GET', '/api/me')).status, 401);
+    assert.equal((await laptop.call('GET', '/api/me')).status, 200);
+    // The person can change their own name (not their email or role), and it is logged.
+    assert.equal((await laptop.call('POST', '/api/me/profile', { name: '' })).status, 400);
+    const r = await laptop.call('POST', '/api/me/profile', { name: 'Sara A. Al-Otaibi', role: 'admin', email: 'x@y.sa' });
+    assert.equal(r.body.user.name, 'Sara A. Al-Otaibi');
+    assert.equal(r.body.user.role, 'procurement');
+    assert.ok((await laptop.call('GET', '/api/me/activity')).body.recent.some((e) => e.action === 'profile.updated'));
   });
 });
 

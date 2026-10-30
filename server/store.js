@@ -68,6 +68,10 @@ export class Store {
   listUsers(orgId) { return this.#p('SELECT * FROM users WHERE org_id = ? ORDER BY created_at').all(orgId).map((r) => this.#user(r)); }
   setLoginState(id, failed, lockedUntil) { this.#p('UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?').run(failed, lockedUntil, id); }
   setPassword(id, pwHash) { this.#p('UPDATE users SET pw_hash = ? WHERE id = ?').run(pwHash, id); this.#p('DELETE FROM sessions WHERE user_id = ?').run(id); }
+  setName(id, name) { this.#p('UPDATE users SET name = ? WHERE id = ?').run(name, id); }
+  countSessions(userId) { return this.#p('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND expires_at > ?').get(userId, now()).n; }
+  /** Sign a user out everywhere except the session making the request. */
+  deleteOtherSessions(userId, keepToken) { return this.#p('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').run(userId, sha256(keepToken)).changes; }
   deleteUser(orgId, id) { return this.#p('DELETE FROM users WHERE id = ? AND org_id = ?').run(id, orgId).changes; }
 
   createSession(userId, token, csrf, ttlMs) {
@@ -214,8 +218,10 @@ export class Store {
       return { seq, hash };
     });
   }
-  listAudit(org, { limit = 200, target } = {}) {
-    const rows = target
+  listAudit(org, { limit = 200, target, actor } = {}) {
+    const rows = actor
+      ? this.#p('SELECT * FROM audit WHERE org_id = ? AND actor = ? ORDER BY seq DESC LIMIT ?').all(org, actor, limit)
+      : target
       ? this.#p('SELECT * FROM audit WHERE org_id = ? AND target = ? ORDER BY seq DESC LIMIT ?').all(org, target, limit)
       : this.#p('SELECT * FROM audit WHERE org_id = ? ORDER BY seq DESC LIMIT ?').all(org, limit);
     return rows.map((r) => {
