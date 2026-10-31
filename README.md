@@ -11,7 +11,7 @@ HUMAIN Future AI Builders Hackathon 2026 · **Challenge 3: Autonomous Enterprise
 ## For judges: try it in 2 minutes
 
 1. Open **https://wazin.onrender.com** (free hosting, kept awake by a 5-minute monitor; data resets on restart).
-2. Sign in as **admin@sahara.example** (the administrator can do every team's step). The password for every account is `Wazin-Demo-2026` (demo company, made-up data, resets on restart). Other teams: `ap@`, `finance@`, `procurement@`, `warehouse@`, `treasury@sahara.example`.
+2. Sign in as **admin@sahara.example** (the administrator can do every team's step). The password for every account is `Wazin-Demo-2026` (demo company, made-up data, resets on restart). Other teams: `ap@sahara.example`, `finance@sahara.example`, `procurement@sahara.example`, `warehouse@sahara.example`, `treasury@sahara.example`.
 3. **New invoice → Sample invoices to try → Use → Check.** Ten samples cover every kind of decision.
 4. **Orders & receipts:** record a delivery (try marking a few units damaged) to see the delivery report.
 5. Test results: [`eval/HELDOUT.md`](eval/HELDOUT.md) and [`eval/REALISTIC.md`](eval/REALISTIC.md). Tests run on every upload (GitHub Actions).
