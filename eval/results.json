@@ -4,7 +4,7 @@
       "n": 300,
       "seed": 2026,
       "llm": false,
-      "date": "2026-10-30",
+      "date": "2026-10-31",
       "node": "v22.23.4"
     },
     "formats": {
@@ -165,10 +165,10 @@
     },
     "earlyPayDiscountsSAR": 5598,
     "latencyMs": {
-      "mean": 0.59,
-      "p50": 0.52,
-      "p95": 0.98,
-      "max": 5.13
+      "mean": 0.52,
+      "p50": 0.48,
+      "p95": 0.77,
+      "max": 3.17
     },
     "compute": {
       "llmCallsMade": 0,

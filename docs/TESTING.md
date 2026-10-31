@@ -51,6 +51,15 @@ Results in [`eval/HELDOUT.md`](../eval/HELDOUT.md). Nothing in it was used while
 
 The two messy-input tests in `test/extract.test.js` keep these cases from breaking again (regression checks).
 
+## Realistic evaluation (`npm run realistic`)
+
+Results in [`eval/REALISTIC.md`](../eval/REALISTIC.md). The generated benchmark is built from the same rules Wazin enforces, so perfect scores there prove the logic only. This evaluation is designed to find mistakes.
+
+- **Balanced set:** 550 invoices with all 11 situations equally common (the development set is 40% clean) and 20% carrying several problems at once.
+- **Hard real-world set:** 15 situations × 20, each labelled with what a careful accounts-payable team would do before Wazin runs: bank accounts written with spaces, VAT rounded line by line, order numbers typed differently, legal-name variants, prices just inside and just outside the tolerance, part-billing, an order split to stay under the approval limit, re-billing under a new number and date, monthly services, day/month/year dates, genuine bank changes, an impostor quoting a real order, European number style and free-text emails.
+- **Outcomes** are split into correct, sent to a person, held (safe), misrouted (safe) and paid wrongly (unsafe).
+- **Iteration:** the first run (saved in `eval/realistic-v1.json`) found three formatting cases treated as problems. They were fixed, regression checks were added to `test/agent.test.js` and `test/extract.test.js`, and the hard set was regenerated from a new seed to confirm the gain was not tuned to one sample. Remaining gaps are listed in the report.
+
 ## Trying it by hand
 
 `WAZIN_SEED_PASSWORD="choose-a-password-1" npm start`, open http://localhost:3000 and sign in as each team (`ap@sahara.example`, `treasury@sahara.example` and so on; see the README).

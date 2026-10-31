@@ -1,5 +1,6 @@
 // Business operations. HTTP-independent so it can be tested directly.
 // Every operation takes the acting user, checks the role, writes the audit trail.
+import crypto from 'node:crypto';
 import { WazinAgent, ledgerEntry, OWNERS } from '../src/agent.js';
 import { isValidSaudiVat, round2 } from '../src/zatca.js';
 import { SqlERP } from './store.js';
@@ -45,13 +46,18 @@ export class AppError extends Error {
   }
 }
 const bad = (code, detail) => new AppError(400, code, detail);
+export const SUPPORT_TOPICS = ['technical', 'account', 'billing', 'zatca', 'security', 'feedback'];
 const forbidden = () => new AppError(403, 'forbidden');
 const notFound = () => new AppError(404, 'not_found');
 
 /** The six roles. The administrator may do every step, so a one-person company works too. */
 export const ROLES = ['admin', 'ap', 'finance', 'procurement', 'warehouse', 'treasury'];
 export const ROLE_OWNER = { ap: ['AP', 'VENDOR'], finance: ['FINANCE_MANAGER'], procurement: ['PROCUREMENT'], warehouse: ['WAREHOUSE'], treasury: ['TREASURY'], admin: Object.keys(OWNERS) };
-const OPEN = ['APPROVAL_REQUIRED', 'PARKED', 'EXCEPTION', 'BLOCKED', 'REVIEW'];
+const OPEN = ['APPROVAL_REQUIRED', 'PARKED', 'EXCEPTION', 'BLOCKED', 'REVIEW', 'DISPUTED'];
+// Decisions made by Wazin itself, which any team member can dispute.
+const DISPUTABLE = ['APPROVED_AUTO', 'APPROVAL_REQUIRED', 'PARKED', 'EXCEPTION', 'BLOCKED'];
+export const DISPUTE_KINDS = ['should_not_pay', 'should_pay', 'wrong_problem', 'wrong_team'];
+const PAYABLE = ['APPROVED_AUTO', 'APPROVAL_REQUIRED'];
 const FINAL = ['APPROVED_AUTO', 'APPROVED', 'REJECTED', 'CLOSED'];
 const MAX_DOC = 512 * 1024;
 const SESSION_TTL = 12 * 60 * 60 * 1000;
@@ -305,6 +311,13 @@ export class Service {
       if (rec.status === 'EXCEPTION' && can(user, 'procurement')) a.push('reject');
     }
     if (rec.status === 'REVIEW' && can(user, 'ap')) a.push('manual_entry', 'resubmit', 'reject');
+    // Disputes: anyone can challenge a decision Wazin made; the Finance Manager settles it.
+    if (rec.status === 'DISPUTED' && can(user, 'finance')) {
+      a.push('uphold');
+      if (rec.result?.payment && this.s.getVendor(user.orgId, rec.result.vendorVat)) a.push('approve');
+      a.push('reject');
+    }
+    if (DISPUTABLE.includes(rec.status)) a.push('dispute');
     return [...new Set(a)];
   }
 
@@ -322,7 +335,31 @@ export class Service {
         this.#commit(org, rec, r, erp, who, act, n);
       };
 
+      // When a disputed decision is settled, record whether Wazin's original decision stood.
+      const dispute = rec.status === 'DISPUTED' ? [...(rec.history || [])].reverse().find((e) => e.action === 'invoice.disputed') : null;
+      const settle = (wazinRight) => dispute && this.s.audit(org.id, who, wazinRight ? 'invoice.dispute_confirmed' : 'invoice.dispute_corrected', rec.id, { from: dispute.from, kind: dispute.kind });
+
       switch (action) {
+        case 'dispute': {
+          const kind = DISPUTE_KINDS.includes(body.kind) ? body.kind : null;
+          if (!kind) throw bad('dispute_kind_required');
+          if (!note) throw bad('reason_required');
+          const from = rec.status;
+          this.s.tx(() => {
+            if (from === 'APPROVED_AUTO') this.s.unpost(org.id, rec.id); // hold the scheduled payment
+            Object.assign(rec, { status: 'DISPUTED', owner: 'FINANCE_MANAGER' });
+            rec.history.push({ ts: Date.now(), actor: who, action: 'invoice.disputed', note, kind, from, decision: 'DISPUTED' });
+            this.s.saveInvoice(org.id, rec);
+            this.s.audit(org.id, who, 'invoice.disputed', rec.id, { from, kind, note });
+          });
+          break;
+        }
+        case 'uphold': {
+          // Wazin's decision stands: check the invoice again with today's facts and act on the result.
+          await rerun(rec.doc, 'invoice.dispute_upheld', note);
+          settle(true);
+          break;
+        }
         case 'approve': {
           const r = rec.result;
           const vendor = this.s.getVendor(org.id, r.vendorVat);
@@ -332,6 +369,7 @@ export class Service {
             rec.history.push({ ts: Date.now(), actor: who, action: 'invoice.approved', note, decision: 'APPROVED' });
             this.s.saveInvoice(org.id, rec);
             this.s.audit(org.id, who, 'invoice.approved', rec.id, { amount: r.payment?.amount, payOn: r.payment?.payOn, note: note || undefined });
+            settle(PAYABLE.includes(dispute?.from));
           });
           break;
         }
@@ -344,6 +382,7 @@ export class Service {
             rec.history.push({ ts: Date.now(), actor: who, action: `invoice.${status.toLowerCase()}`, note, decision: status });
             this.s.saveInvoice(org.id, rec);
             this.s.audit(org.id, who, `invoice.${status.toLowerCase()}`, rec.id, { note: note || undefined });
+            settle(!PAYABLE.includes(dispute?.from));
           });
           break;
         }
@@ -554,6 +593,8 @@ export class Service {
       waiting: OPEN.reduce((s, k) => s + (byStatus[k] || 0), 0),
       stoppedAmount: round2(stopped),
       discounts: round2(led.discounts),
+      // Real-world accuracy signal: how often people disputed a decision, and how often Wazin turned out right.
+      disputes: { open: byStatus.DISPUTED || 0, ...this.s.disputeCounts(ctx.org.id) },
       myTasks: myTasks.slice(0, 50),
     };
   }
@@ -564,6 +605,25 @@ export class Service {
     return m;
   }
   // ======================= my profile =======================
+  /**
+   * A request from the Help page. Signed-in users are identified by their session;
+   * visitors give a name and email. Returns a reference number the user can quote.
+   */
+  submitSupport(ctx, { name, email: em, topic, message }) {
+    const tp = SUPPORT_TOPICS.includes(topic) ? topic : null;
+    if (!tp) throw bad('topic_required');
+    const msg = str(message, 2000);
+    if (msg.length < 10) throw bad('message_too_short');
+    const who = ctx ? { name: ctx.user.name, email: ctx.user.email } : { name: str(name, 120), email: email(em) };
+    if (!who.name) throw bad('name_required');
+    const d = new Date();
+    const ref = `WZ-${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    this.s.addSupportRequest({ ref, orgId: ctx?.org.id, userId: ctx?.user.id, topic: tp, ...who, message: msg });
+    if (ctx) this.s.audit(ctx.org.id, ctx.user.email, 'support.requested', ref, { topic: tp });
+    this.log('info', 'support_request', { ref, topic: tp, org: ctx?.org.id });
+    return { ref, email: who.email, urgent: tp === 'security' };
+  }
+
   updateProfile(ctx, { name }) {
     const n = str(name, 120);
     if (!n) throw bad('name_required');

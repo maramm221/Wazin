@@ -53,6 +53,17 @@ export class Store {
     return this.#p("DELETE FROM orgs WHERE kind = 'sandbox' AND expires_at IS NOT NULL AND expires_at < ?").run(now()).changes;
   }
 
+  // ---------- support requests ----------
+  /** Save a Help-page request. Contact details and the message are encrypted under the 'support' key context. */
+  addSupportRequest({ ref, orgId, userId, topic, name, email, message }) {
+    this.#p('INSERT INTO support_requests (ref,org_id,user_id,topic,contact_enc,message_enc,created_at) VALUES (?,?,?,?,?,?,?)')
+      .run(ref, orgId || null, userId || null, topic, this.enc('support', 'contact', JSON.stringify({ name, email })), this.enc('support', 'message', message), now());
+  }
+  getSupportRequest(ref) {
+    const r = this.#p('SELECT * FROM support_requests WHERE ref = ?').get(ref);
+    return r && { ref: r.ref, orgId: r.org_id, userId: r.user_id, topic: r.topic, status: r.status, createdAt: r.created_at, ...JSON.parse(this.dec('support', 'contact', r.contact_enc)), message: this.dec('support', 'message', r.message_enc) };
+  }
+
   // ---------- users & sessions ----------
   createUser({ orgId, email, name, role, pwHash }) {
     const id = `usr_${crypto.randomUUID()}`;
@@ -196,6 +207,12 @@ export class Store {
   // ---------- ledger ----------
   post(org, entry) {
     this.#p('INSERT OR REPLACE INTO ledger (org_id,invoice_id,entry_json,created_at) VALUES (?,?,?,?)').run(org, entry.id, JSON.stringify(entry), now());
+  }
+  /** Remove a scheduled payment (used when a paid-automatically decision is disputed). */
+  unpost(org, invoiceId) { this.#p('DELETE FROM ledger WHERE org_id = ? AND invoice_id = ?').run(org, invoiceId); }
+  disputeCounts(org) {
+    const n = (a) => this.#p('SELECT COUNT(*) AS n FROM audit WHERE org_id = ? AND action = ?').get(org, a).n;
+    return { raised: n('invoice.disputed'), confirmed: n('invoice.dispute_confirmed'), corrected: n('invoice.dispute_corrected') };
   }
   ledger(org) { return this.#p('SELECT entry_json FROM ledger WHERE org_id = ? ORDER BY created_at DESC').all(org).map((r) => JSON.parse(r.entry_json)); }
   ledgerTotals(org) {

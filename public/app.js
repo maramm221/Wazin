@@ -39,7 +39,7 @@ const money = (n) => (n === null || n === undefined || Number.isNaN(Number(n)) ?
 const whole = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 const when = (ts) => new Date(ts).toLocaleString(isAr() ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 
-const STATUS_TONE = { APPROVED_AUTO: 'ok', APPROVED: 'ok', APPROVAL_REQUIRED: 'info', PARKED: 'wait', EXCEPTION: 'warn', BLOCKED: 'crit', REVIEW: 'neutral', REJECTED: 'neutral', CLOSED: 'neutral' };
+const STATUS_TONE = { APPROVED_AUTO: 'ok', APPROVED: 'ok', APPROVAL_REQUIRED: 'info', PARKED: 'wait', EXCEPTION: 'warn', BLOCKED: 'crit', REVIEW: 'neutral', REJECTED: 'neutral', CLOSED: 'neutral', DISPUTED: 'warn' };
 const pill = (status) => h('span', { class: `pill tone-${STATUS_TONE[status] || 'neutral'}`, text: t(`st_${status}`) });
 
 // Company set-up: which teams exist. A task for a team the company does not have goes to the administrator.
@@ -316,8 +316,8 @@ function pageWelcome() {
       h('ul', { class: 'trust-row' }, ['trust_1', 'trust_2', 'trust_3'].map((k) => h('li', { text: t(k) })))),
     preview));
 
-  // Why it is needed: local evidence, each with its source.
-  const why = h('section', { class: 'band', id: 'why', 'aria-labelledby': 'why_h' }, h('div', { class: 'wrap' },
+  // Why it is needed (shown after How it works): local evidence, each with its source.
+  const why = h('section', { class: 'band alt', id: 'why', 'aria-labelledby': 'why_h' }, h('div', { class: 'wrap' },
     h('p', { class: 'eyebrow', text: t('why_eyebrow') }),
     h('h2', { id: 'why_h', class: 'band-title', text: t('why_title') }),
     h('p', { class: 'band-lead', text: t('why_lead') }),
@@ -329,7 +329,7 @@ function pageWelcome() {
 
   // How it works: five steps.
   const icons = ['1-read', '2-check', '3-weigh', '4-act', '5-follow-up'];
-  const how = h('section', { class: 'band alt', id: 'how', 'aria-labelledby': 'how_h' }, h('div', { class: 'wrap' },
+  const how = h('section', { class: 'band', id: 'how', 'aria-labelledby': 'how_h' }, h('div', { class: 'wrap' },
     h('p', { class: 'eyebrow', text: t('how_eyebrow') }),
     h('h2', { id: 'how_h', class: 'band-title', text: t('how_title') }),
     h('ol', { class: 'steps5' }, icons.map((ic, i) => h('li', {},
@@ -359,7 +359,7 @@ function pageWelcome() {
       h('p', { text: t(`size_${k}_d`) }))))));
 
   // Trust and compliance.
-  const trust = h('section', { class: 'band alt', id: 'trust', 'aria-labelledby': 'trust_h' }, h('div', { class: 'wrap trust-grid' },
+  const trust = h('section', { class: 'band', id: 'trust', 'aria-labelledby': 'trust_h' }, h('div', { class: 'wrap trust-grid' },
     h('div', {}, h('p', { class: 'eyebrow', text: t('trust_eyebrow') }), h('h2', { id: 'trust_h', class: 'band-title', text: t('trust_title') }), h('p', { class: 'band-lead', text: t('trust_lead') })),
     h('ul', { class: 'trust-list' }, [1, 2, 3, 4, 6, 7, 5].map((n) => h('li', {}, h('b', { text: t(`tr${n}_t`) }), h('span', { text: t(`tr${n}_d`) }))))));
 
@@ -369,7 +369,7 @@ function pageWelcome() {
       state.config.signup ? h('a', { class: 'btn primary big', href: '#/signup', text: t('open_account') }) : null,
       h('a', { class: 'btn big on-dark', href: '#/signin', text: t('sign_in') }))));
 
-  return publicFrame(hero, why, how, teams, sizes, trust, closing);
+  return publicFrame(hero, how, why, teams, sizes, trust, closing);
 }
 
 function formField(label, input, help) {
@@ -439,6 +439,7 @@ async function pageHome() {
     h('div', { class: 'page-head' }, h('h1', { text: t('hello', { name: user.name.split(' ')[0] }) }), h('p', { class: 'muted', text: t('signed_in_as', { role: t(`role_${user.role}`) }) })),
     h('section', { class: 'card guide', 'aria-labelledby': 'g_h' }, h('h2', { id: 'g_h', text: t('next_steps') }), h('ol', {}, guide.map((s) => h('li', { text: s })))),
     h('section', { class: 'kpis', 'aria-label': 'Summary' }, kpis.map(([k, v, sub, tone]) => h('div', { class: `kpi tone-${tone}` }, h('span', { class: 'kpi-label', text: t(k) }), h('span', { class: 'kpi-val', text: v }), h('span', { class: 'kpi-sub', text: t(sub) })))),
+    disputeCard(d.disputes),
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', { text: t('your_tasks') }), h('span', { class: 'count', text: String(d.myTasks.length) })),
       d.myTasks.length ? invoiceList(d.myTasks) : h('p', { class: 'empty-inline', text: t('no_tasks') })),
     h('section', { class: 'card' }, h('h2', { text: t('team_overview') }),
@@ -453,8 +454,26 @@ function invoiceList(rows) {
       h('span', { class: 'inv-state' }, pill(r.status), r.owner !== 'NONE' ? h('span', { class: 'muted small', text: ownerLabel(r.owner) }) : null)))));
 }
 
+// Who disputed this invoice, and why.
+function disputeNote(v) {
+  const d = [...(v.history || [])].reverse().find((e) => e.action === 'invoice.disputed');
+  if (!d) return null;
+  return h('div', { class: 'dispute-note' }, h('h2', { text: t('disputed_by', { name: (v.audit || []).find((e) => e.action === 'invoice.disputed')?.actorName || d.actor }) }),
+    h('p', {}, h('b', { text: `${t(`dk_${d.kind}`)}: ` }), d.note || ''));
+}
+
+// How often people disputed Wazin's decisions, and how often Wazin turned out to be right.
+function disputeCard(x = {}) {
+  const settled = (x.confirmed || 0) + (x.corrected || 0);
+  const item = (k, v) => h('li', {}, h('span', { class: 'kpi-label', text: t(k) }), h('b', { class: 'num', text: String(v || 0) }));
+  return h('section', { class: 'card', 'aria-labelledby': 'dq_h' },
+    h('div', { class: 'card-head' }, h('h2', { id: 'dq_h', text: t('dq_title') }), settled ? h('span', { class: 'count', text: t('dq_right', { pct: Math.round((100 * x.confirmed) / settled) }) }) : null),
+    h('p', { class: 'muted small', text: t('dq_lead') }),
+    h('ul', { class: 'owners' }, item('dq_raised', x.raised), item('dq_open', x.open), item('dq_confirmed', x.confirmed), item('dq_corrected', x.corrected)));
+}
+
 // ---------------------------------------------------------------- invoices
-const FILTERS = { all: {}, open: { statuses: ['APPROVAL_REQUIRED', 'PARKED', 'EXCEPTION', 'BLOCKED', 'REVIEW'] }, paid: { statuses: ['APPROVED_AUTO', 'APPROVED'] }, blocked: { statuses: ['BLOCKED'] }, rejected: { statuses: ['REJECTED', 'CLOSED'] } };
+const FILTERS = { all: {}, open: { statuses: ['APPROVAL_REQUIRED', 'PARKED', 'EXCEPTION', 'BLOCKED', 'REVIEW', 'DISPUTED'] }, paid: { statuses: ['APPROVED_AUTO', 'APPROVED'] }, blocked: { statuses: ['BLOCKED'] }, rejected: { statuses: ['REJECTED', 'CLOSED'] } };
 let invFilter = 'all', invQuery = '';
 async function pageInvoices() {
   const rows = await api('GET', `/api/invoices?limit=500${invQuery ? `&q=${encodeURIComponent(invQuery)}` : ''}`);
@@ -496,6 +515,7 @@ async function pageInvoice(id) {
     h('h2', { text: t('what_happened') }),
     r.issues.length ? h('ul', { class: 'issues' }, r.issues.map((i) => h('li', { text: pick(i.message, i.messageAr) })))
       : h('p', { text: pick(r.steps.at(-1)?.detail, r.steps.at(-1)?.detailAr) }),
+    v.status === 'DISPUTED' ? disputeNote(v) : null,
     h('h2', { text: t('what_next') }), h('p', { text: t(nextKey) }));
 
   const actions = actionPanel(v);
@@ -552,13 +572,16 @@ function actionPanel(v) {
     if (['APPROVED_AUTO', 'APPROVED', 'REJECTED', 'CLOSED'].includes(v.status)) return null;
     return h('section', { class: 'card muted-card' }, h('p', { text: t('not_your_action', { owner: ownerLabel(v.owner) }) }));
   }
+  const onlyDispute = v.actions.length === 1 && v.actions[0] === 'dispute';
   const area = h('div', {});
   const buttons = h('div', { class: 'action-buttons' }, v.actions.map((a) => h('button', {
     type: 'button', class: `btn ${['approve', 'verify_bank', 'amend_po', 'record_receipt', 'resubmit', 'add_vendor', 'manual_entry'].includes(a) && a === v.actions[0] ? 'primary' : a === 'reject' ? 'danger-ghost' : ''}`,
     onclick: () => { area.replaceChildren(actionForm(v, a, () => area.replaceChildren())); area.querySelector('input,textarea,select,button')?.focus(); },
     text: t(`a_${a}`),
   })));
-  return h('section', { class: 'card action-card', 'aria-labelledby': 'act_h' }, h('h2', { id: 'act_h', text: t('your_action') }), buttons, area);
+  return h('section', { class: 'card action-card', 'aria-labelledby': 'act_h' }, h('h2', { id: 'act_h', text: t(onlyDispute ? 'dispute_title' : 'your_action') }),
+    onlyDispute ? h('p', { class: 'muted small', text: v.owner !== 'NONE' ? `${t('not_your_action', { owner: ownerLabel(v.owner) })} ${t('dispute_help')}` : t('dispute_help') }) : null,
+    buttons, area);
 }
 
 function actionForm(v, action, close) {
@@ -573,6 +596,14 @@ function actionForm(v, action, close) {
   };
   if (action === 'approve' || action === 'close' || action === 'amend_po') note(false);
   if (action === 'reject') note(true);
+  if (action === 'dispute') {
+    const kind = h('select', { required: true }, h('option', { value: '', text: t('dispute_pick') }),
+      ['should_not_pay', 'should_pay', 'wrong_problem', 'wrong_team'].map((k) => h('option', { value: k, text: t(`dk_${k}`) })));
+    fields.push(h('p', { class: 'muted small', text: t(v.status === 'APPROVED_AUTO' ? 'dispute_hold' : 'dispute_review') }), formField(t('dispute_kind'), kind));
+    get.kind = () => kind.value;
+    note(true);
+  }
+  if (action === 'uphold') note(false);
   if (action === 'verify_bank') {
     const vend = v.vendor || {};
     fields.push(h('dl', { class: 'facts compact' },
@@ -941,10 +972,39 @@ async function pageProfile() {
 function helpContent() {
   const faq = [1, 2, 3, 4, 5, 6, 7].map((n) => h('details', { class: 'faq' }, h('summary', { text: t(`faq${n}_q`) }), h('p', { text: t(`faq${n}_a`) })));
   const mail = state.config.support;
-  const contact = h('section', { class: 'card contact' }, h('h2', { text: t('help_contact') }),
-    mail ? h('p', {}, t('help_contact_lead'), ' ', h('a', { href: `mailto:${mail}?subject=${encodeURIComponent('Wazin')}`, text: mail }))
-      : h('p', { class: 'muted', text: t('help_contact_none') }),
-    h('p', { class: 'muted small', text: t('help_contact_time') }));
+
+  // How and when we answer.
+  const info = (title, ...body) => h('div', { class: 'c-info' }, h('h3', { text: title }), ...body);
+  const facts = h('div', { class: 'c-facts' },
+    info(t('c_hours_t'), h('p', { text: t('c_hours_d') })),
+    info(t('c_reply_t'), h('p', { text: t('c_reply_d') })),
+    info(t(mail ? 'c_email_t' : 'c_track_t'), mail ? h('p', {}, h('a', { href: `mailto:${mail}?subject=${encodeURIComponent('Wazin support')}`, text: mail })) : h('p', { text: t('c_email_form') })));
+  const urgent = h('p', { class: 'c-urgent', role: 'note' }, h('b', { text: t('c_urgent_t') }), ' ', t('c_urgent_d'));
+
+  // The request form. Signed-in users are already known; visitors give a name and email.
+  const nm = h('input', { type: 'text', autocomplete: 'name', required: true, maxlength: 120 });
+  const em = h('input', { type: 'email', autocomplete: 'email', required: true });
+  const topic = h('select', { required: true }, h('option', { value: '', text: t('c_topic_pick') }),
+    ['technical', 'account', 'billing', 'zatca', 'security', 'feedback'].map((k) => h('option', { value: k, text: t(`c_topic_${k}`) })));
+  const msg = h('textarea', { rows: 5, maxlength: 2000, required: true });
+  const err = formError();
+  const btn = h('button', { class: 'btn primary', type: 'submit', text: t('c_send') });
+  const form = h('form', { class: 'c-form', novalidate: true },
+    state.me ? h('p', { class: 'muted small', text: t('c_as', { name: state.me.user.name, email: state.me.user.email }) }) : h('div', { class: 'c-row' }, formField(t('c_name'), nm), formField(t('c_work_email'), em)),
+    formField(t('c_topic'), topic), formField(t('c_message'), msg, t('c_privacy')), err, btn);
+  const done = h('div', { class: 'c-done', role: 'status', hidden: true });
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    err.hidden = true; btn.disabled = true;
+    try {
+      const body = { topic: topic.value, message: msg.value, ...(state.me ? {} : { name: nm.value, email: em.value }) };
+      const r = await api('POST', state.me ? '/api/me/support' : '/api/support', body);
+      done.replaceChildren(h('h3', { text: t('c_done_t') }), h('p', {}, t('c_done_ref'), ' ', h('b', { class: 'num', text: r.ref })), h('p', { class: 'muted', text: t(r.urgent ? 'c_done_urgent' : 'c_done_d', { email: r.email }) }));
+      done.hidden = false; form.hidden = true;
+    } catch (x) { showErr(err, x); btn.disabled = false; }
+  };
+
+  const contact = h('section', { class: 'card contact', id: 'contact' }, h('h2', { text: t('help_contact') }), h('p', { class: 'muted', text: t('c_lead') }), facts, urgent, form, done);
   return h('div', { class: state.me ? 'stack' : 'stack wrap help-public' },
     h('div', { class: 'page-head' }, h('h1', { text: t('nav_help') }), h('p', { class: 'muted', text: t('help_lead') })),
     h('section', { class: 'card' }, h('h2', { text: t('help_faq') }), faq), contact);

@@ -40,7 +40,7 @@ Render generates `WAZIN_DATA_KEY`, the encryption key, automatically (a random 2
 | `NODE_ENV` | yes | `production` turns on Secure cookies, HSTS and trusts the host's proxy for client addresses. |
 | `PORT` | no | Default 3000; hosts set it for you. |
 | `WAZIN_DB` | no | Database file path. Default `var/wazin.db`. |
-| `WAZIN_SUPPORT_EMAIL` | no | The address shown on the Help & contact page. Without it, people are told to ask their company administrator. |
+| `WAZIN_SUPPORT_EMAIL` | no | The address shown on the Help & contact page. Requests can always be sent through the form there; each is stored encrypted with a reference number. |
 | `ANTHROPIC_API_KEY` | no | Turns on AI reading of free-text invoices. |
 | `WAZIN_MODEL` | no | Model id for that reading. |
 | `WAZIN_ALLOW_SIGNUP` | no | `0` hides "Create a company workspace". |

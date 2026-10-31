@@ -107,6 +107,8 @@ test('messy text invoices read the same: CRLF, indentation, Arabic-Indic digits,
     renderText(inv, vendor).replace(/\d/g, (x) => AR[x]),
     [ls[0], ...ls.slice(1, end).reverse(), ...ls.slice(end)].join('\n'),
     ls.map((l) => (l.includes(':') && !l.startsWith('QR') ? l.slice(0, l.indexOf(':')).toLowerCase() + l.slice(l.indexOf(':')) : l)).join('\n'),
+    // Regression (realistic evaluation v2): day/month/year dates read as ISO.
+    renderText(inv, vendor).replace(inv.issueDate, inv.issueDate.split('-').reverse().join('/')),
   ];
   for (const v of variants) assert.deepEqual(core((await extract(v)).invoice), want);
 });

@@ -158,7 +158,7 @@ export function expectedFor(defs) {
   return { decision: defs.includes('iban_change') ? 'BLOCKED' : 'EXCEPTION', codes };
 }
 
-export function buildScenario({ seed = 2026, n = 300, emailShare = 0.1, approvalLimit = 50000, compoundShare = 0, vendors = VENDORS } = {}) {
+export function buildScenario({ seed = 2026, n = 300, emailShare = 0.1, approvalLimit = 50000, compoundShare = 0, vendors = VENDORS, weights: customWeights } = {}) {
   const rnd = mulberry32(seed);
   const pick = (a) => a[Math.floor(rnd() * a.length)];
   const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
@@ -168,7 +168,7 @@ export function buildScenario({ seed = 2026, n = 300, emailShare = 0.1, approval
   const invoices = [];
   const approvedClean = [];
   let poSeq = 1000, grnSeq = 5000;
-  const weights = { clean: 40, over_limit: 5, invalid_vat: 6, vat_math: 6, qr_tamper: 5, price_mismatch: 7, qty_mismatch: 6, missing_grn: 6, duplicate: 6, iban_change: 5, no_po: 4 };
+  const weights = customWeights || { clean: 40, over_limit: 5, invalid_vat: 6, vat_math: 6, qr_tamper: 5, price_mismatch: 7, qty_mismatch: 6, missing_grn: 6, duplicate: 6, iban_change: 5, no_po: 4 };
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   const drawDefect = () => {
     let r = rnd() * total;

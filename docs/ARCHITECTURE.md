@@ -54,6 +54,7 @@ The agent is the same code in the web app, the command-line demo (`cli.js`), the
 
 5. **Act.** The service saves the result, posts to the ledger if approved, and writes an audit entry, all in one database transaction.
 6. **Follow up.** When a team acts (`Service.act`: approve, verify bank, amend order, record receipt, resubmit, …) the invoice is processed again from step 2 with the new facts. Recording a goods receipt re-checks every invoice parked on that order.
+7. **Dispute.** Anyone can dispute a decision Wazin made (`dispute`, with a reason). A payment Wazin scheduled is taken off the ledger and held. The Finance Manager settles it: keep Wazin's decision (`uphold`, which re-checks the invoice), approve or reject. Each settlement is logged as `invoice.dispute_confirmed` (Wazin was right) or `invoice.dispute_corrected`, and the dashboard shows the counts: in a pilot, this is the real-world accuracy measure.
 
 ## Data model (`server/db.js`)
 
@@ -68,6 +69,7 @@ The agent is the same code in the web app, the command-line demo (`cli.js`), the
 | `invoices` | Original document, agent result, history, status, owner | document, result and history |
 | `ledger` | Approved invoices and payment dates | none |
 | `audit` | Hash-chained activity log | details |
+| `support_requests` | Requests from the Help page, with a reference number (`WZ-YYMMDD-XXXXXX`) and topic | sender name and email, message |
 
 Every query is scoped by `org_id`; `Store` methods take the company id as their first argument, so one company can never read another's rows. Encrypted values use the company id and field name as additional authenticated data, so a value copied to another company or column fails to decrypt.
 

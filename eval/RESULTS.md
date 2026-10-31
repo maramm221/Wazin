@@ -1,6 +1,6 @@
 # Wazin benchmark results
 
-Run: 300 invoices · seed 2026 · LLM tier OFF (deterministic tiers only) · 2026-10-30 · Node v22.23.4
+Run: 300 invoices · seed 2026 · LLM tier OFF (deterministic tiers only) · 2026-10-31 · Node v22.23.4
 
 | Metric | Result |
 |---|---|
@@ -15,7 +15,7 @@ Run: 300 invoices · seed 2026 · LLM tier OFF (deterministic tiers only) · 202
 | Parked → auto-cleared when goods receipt arrived | 13 / 13 |
 | SAR at risk caught (duplicates + bank diversion + overcharges) | SAR 364,383 |
 | Early-payment discounts captured | SAR 5,598 |
-| Latency per invoice (mean / p95) | 0.59 ms / 0.98 ms |
+| Latency per invoice (mean / p95) | 0.52 ms / 0.77 ms |
 | LLM tokens: Wazin vs naive all-LLM agent (est.) | 18,497 vs 2,015,465 (−99.1%) |
 
 ## Per-check precision / recall

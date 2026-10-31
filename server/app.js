@@ -176,6 +176,9 @@ export function createApp(opts = {}) {
   });
 
   route('GET', '/api/me', (ctx) => service.me(ctx));
+  // Help page: visitors and signed-in users can both send a request (the signed-in route is CSRF-protected).
+  route('POST', '/api/support', (ctx, r, p, b) => service.submitSupport(null, b), { auth: false, limit: ['support', 5, 3600e3] });
+  route('POST', '/api/me/support', (ctx, r, p, b) => service.submitSupport(ctx, b), { limit: ['support', 5, 3600e3] });
   route('POST', '/api/me/password', (ctx, r, p, b) => (service.changePassword(ctx, b), { ok: true }));
   route('POST', '/api/me/profile', (ctx, r, p, b) => (service.updateProfile(ctx, b), service.me(service.authenticate(ctx.token))));
   route('GET', '/api/me/activity', (ctx) => service.myActivity(ctx));

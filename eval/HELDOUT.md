@@ -1,6 +1,6 @@
 # Held-out evaluation
 
-Run: `npm run heldout` · 2026-10-30 · Node v22.23.4. Nothing here was used while building or tuning Wazin's rules.
+Run: `npm run heldout` · 2026-10-31 · Node v22.23.4. Nothing here was used while building or tuning Wazin's rules.
 "Correct" means the same decision a careful accounts-payable team would make (pay, ask for approval, wait for goods, send back, or block).
 "Wrong payment" means Wazin would have paid an invoice that should not be paid. Unreadable invoices go to a person ("manual review"); that is the safe outcome.
 About 10% of invoices are free-text emails. Without an AI key they cannot be read by rules, so they go to a person: that is the "Sent to a person" column, not an error.

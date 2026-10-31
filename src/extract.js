@@ -108,7 +108,10 @@ export function parseText(text) {
   const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const get = (f) => findLabel(lines, LABELS[f]);
   const date = get('issueDate');
-  const dm = date && date.match(/(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?))?/);
+  // ISO dates, or day/month/year as printed on many invoices (14/10/2026 -> 2026-10-14).
+  const dmy = date && date.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b/);
+  const dm = (date && date.match(/(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?))?/))
+    || (dmy && Number(dmy[2]) <= 12 ? [null, `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`] : null);
   const seller = get('sellerName');
   const items = lines
     .filter((l) => /^[-•*]\s*/.test(l) && l.includes('|'))

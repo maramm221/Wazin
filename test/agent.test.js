@@ -83,6 +83,10 @@ test('price above PO -> procurement, with overcharge quantified', async () => {
 test('price within 1% tolerance is accepted (rounding on supplier side)', async () => {
   const inv = makeInvoice({ lines: [{ sku: 'OFF-CHR', name: 'Ergonomic office chair', qty: 10, unitPrice: 452 }, { sku: 'OFF-DSK', name: 'Standing desk', qty: 2, unitPrice: 1200 }] });
   assert.equal((await setup().process(renderUBL(inv))).decision, 'APPROVED_AUTO');
+  // Regression (realistic evaluation v2): the same bank account in groups of four, and the order
+  // number written as "po 1." are the same facts, not a fraud signal or a missing order.
+  const r2 = await setup().process(renderUBL(makeInvoice({ invoiceNumber: 'ALN-9', iban: V.iban.replace(/(.{4})/g, '$1 ').trim(), poNumber: 'po 1.' })));
+  assert.equal(r2.decision, 'APPROVED_AUTO', 'read as order PO-1 and the verified account');
 });
 
 test('billed more than received -> warehouse', async () => {

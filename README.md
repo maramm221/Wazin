@@ -49,6 +49,7 @@ npm test             # 88 automated tests
 npm run eval         # 300-invoice benchmark  -> eval/RESULTS.md
 npm run stress       # 3,000-invoice stress test -> eval/STRESS.md
 npm run heldout      # unseen data, messy inputs, ablation, settings -> eval/HELDOUT.md
+npm run realistic    # balanced classes + 15 hard real-world cases, with errors -> eval/REALISTIC.md
 npm run demo         # the 13-invoice demo in the terminal, no browser
 ```
 
@@ -114,8 +115,11 @@ test/       88 automated tests
 | **Held-out:** 600 invoices from 6 unseen suppliers (incl. 2–3 problems at once) | **100% correct, 0 wrong payments** |
 | **Robustness:** messy inputs (line breaks, spacing, Arabic-Indic digits, field order, lower-case labels, minified XML) | **100% correct when read, 0 wrong payments** |
 | **Ablation:** switching off any one check | **12–64 wrong payments, SAR 169K–808K paid wrongly** (so each check earns its place) |
+| **Realistic, balanced:** 550 invoices, all 11 situations equally often | **92.4% handled without a person, all of those correct** |
+| **Realistic, hard cases:** 340 invoices in 15 situations the rules were not built for (new seed) | **70.6% correct**; most misses are safe holds for a person; **one unsafe gap** (a large order split into two invoices under the approval limit) |
+| Iteration: hard-case accuracy before → after fixing three findings | **57.1% → 70.0%** (confirmed 70.6% on a fresh seed) |
 
-The benchmark data is synthetic and labelled, so it proves the rules and routing are exact. Reading accuracy on real scanned invoices is the first thing a pilot would measure.
+The generated benchmark is synthetic and built from the same rules Wazin enforces, so its perfect scores prove the logic, not real-world accuracy. The realistic set (`eval/REALISTIC.md`) adds situations Wazin was not designed for and reports every mistake. In real use, anyone can **dispute** a decision; the dashboard counts how often Wazin was right after review, which is the measure a pilot would track.
 
 ## Limits, said plainly
 

@@ -56,6 +56,8 @@ export const addDays = (iso, d) => {
 };
 export const sar = (n) => `SAR ${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const sarAr = (n) => `${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ريال`;
+/** "po 2026/3001." -> "PO-2026-3001": upper case, separators as dashes, no trailing punctuation. */
+export const canonicalPO = (p) => String(p).trim().toUpperCase().replace(/[.,;:]+$/, '').replace(/[\s/_]+/g, '-').replace(/-+/g, '-');
 export const maskIban = (iban) => (iban ? `${iban.slice(0, 4)} •••• ${iban.slice(-4)}` : '—');
 
 /**
@@ -102,6 +104,13 @@ export class WazinAgent {
         `${tier[1]}: تعذّر العثور على ${ex.missing.map((f) => FIELD_AR[f] || f).join('، ')}.`);
       issues.push({ code: 'EXTRACTION_INCOMPLETE', message: `Missing: ${ex.missing.join(', ')}`, messageAr: `حقول ناقصة: ${ex.missing.map((f) => FIELD_AR[f] || f).join('، ')}` });
       return this.#finish({ rid, t0, steps, issues, inv, ex, decision: 'REVIEW', owner: 'AP', doc });
+    }
+    // Tidy how people write the same thing differently (found by the realistic evaluation, v2):
+    // an IBAN in groups of four is the same account; "po 2026/3001." is order PO-2026-3001.
+    if (inv.iban) inv.iban = String(inv.iban).replace(/\s/g, '').toUpperCase();
+    if (inv.poNumber && !(await this.erp.getPO(inv.poNumber))) {
+      const canon = canonicalPO(inv.poNumber);
+      if (canon !== inv.poNumber && (await this.erp.getPO(canon))) inv.poNumber = canon;
     }
     step('read', 'ok', `${tier[0]}: ${inv.invoiceNumber} from ${inv.sellerName}, ${sar(inv.total)}, ${inv.lines.length} line(s).`,
       `${tier[1]}: ${inv.invoiceNumber} من ${inv.sellerName}، ${sarAr(inv.total)}، ${inv.lines.length} بند.`);

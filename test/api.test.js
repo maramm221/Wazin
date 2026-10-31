@@ -110,11 +110,26 @@ describe('the full hand-off flow in a seeded company', () => {
     assert.equal(r.body.status, 'APPROVED_AUTO');
   });
 
-  test('rejecting needs a reason', async () => {
+  test('rejecting needs a reason; anyone can dispute a decision and the Finance Manager settles it', async () => {
     await c.as('ap');
     assert.equal((await c.call('POST', '/api/invoices/WZN-00007/reject', {})).body.error, 'reason_required');
     const r = await c.call('POST', '/api/invoices/WZN-00007/reject', { note: 'Supplier will reissue with VAT number' });
     assert.equal(r.body.status, 'REJECTED');
+    // A warehouse clerk disputes an invoice Wazin paid automatically: the payment is held for review.
+    await c.as('warehouse');
+    const list = (await c.call('GET', '/api/invoices')).body;
+    const paid = (list.items || list).find((i) => i.status === 'APPROVED_AUTO');
+    assert.equal((await c.call('POST', `/api/invoices/${paid.id}/dispute`, { note: 'Half of it arrived damaged' })).body.error, 'dispute_kind_required');
+    const d = await c.call('POST', `/api/invoices/${paid.id}/dispute`, { kind: 'should_not_pay', note: 'Half of it arrived damaged' });
+    assert.equal(d.body.status, 'DISPUTED');
+    assert.equal(d.body.owner, 'FINANCE_MANAGER');
+    assert.equal((await c.call('POST', `/api/invoices/${paid.id}/uphold`, {})).status, 403, 'only finance settles');
+    await c.as('finance');
+    assert.equal((await c.call('GET', '/api/dashboard')).body.disputes.open, 1);
+    const kept = await c.call('POST', `/api/invoices/${paid.id}/uphold`, { note: 'Damage is covered by a separate credit note' });
+    assert.equal(kept.body.status, 'APPROVED_AUTO', 'Wazin re-checks and pays again');
+    assert.deepEqual((await c.call('GET', '/api/dashboard')).body.disputes, { open: 0, raised: 1, confirmed: 1, corrected: 0 });
+    await c.as('ap');
   });
 
   test('an unreadable invoice can be completed by hand and then runs every check', async () => {
@@ -253,7 +268,7 @@ describe('accounts, workspaces and limits', () => {
     await fresh.stop();
   });
 
-  test('logout ends the session on the server; "sign out on other devices" ends the others; profile name and activity', async () => {
+  test('logout ends the session on the server; "sign out on other devices" ends the others; profile name, activity and help requests', async () => {
     const c = t.client();
     await c.company();
     assert.equal((await c.call('GET', '/api/me')).status, 200);
@@ -274,6 +289,15 @@ describe('accounts, workspaces and limits', () => {
     assert.equal(r.body.user.name, 'Sara A. Al-Otaibi');
     assert.equal(r.body.user.role, 'procurement');
     assert.ok((await laptop.call('GET', '/api/me/activity')).body.recent.some((e) => e.action === 'profile.updated'));
+    // Help page: a visitor and a signed-in user can both send a request and get a reference number.
+    const visitor = t.client();
+    assert.equal((await visitor.call('POST', '/api/support', { name: 'Huda', email: 'huda@co.sa', topic: 'nope', message: 'The upload button does nothing.' })).body.error, 'topic_required');
+    assert.equal((await visitor.call('POST', '/api/support', { name: 'Huda', email: 'huda@co.sa', topic: 'technical', message: 'help' })).body.error, 'message_too_short');
+    assert.match((await visitor.call('POST', '/api/support', { name: 'Huda', email: 'huda@co.sa', topic: 'technical', message: 'The upload button does nothing.' })).body.ref, /^WZ-\d{6}-[0-9A-F]{6}$/);
+    const urgent = await laptop.call('POST', '/api/me/support', { topic: 'security', message: 'A supplier emailed asking us to change their bank.' });
+    assert.equal(urgent.body.urgent, true);
+    assert.equal(urgent.body.email, 'procurement@sahara.example');
+    assert.ok((await laptop.call('GET', '/api/me/activity')).body.recent.some((e) => e.action === 'support.requested'));
   });
 });
 

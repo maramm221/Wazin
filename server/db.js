@@ -117,6 +117,17 @@ const MIGRATIONS = [
    );`,
   // 2: per-company working settings (team set-up, 2- or 3-way matching, tolerance, early payment).
   `ALTER TABLE orgs ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}';`,
+  // 3: support requests sent from the Help page. The sender's name, email and message are encrypted.
+  `CREATE TABLE support_requests (
+     ref TEXT PRIMARY KEY,
+     org_id TEXT REFERENCES orgs(id) ON DELETE SET NULL,
+     user_id TEXT,
+     topic TEXT NOT NULL,
+     contact_enc TEXT NOT NULL,
+     message_enc TEXT NOT NULL,
+     status TEXT NOT NULL DEFAULT 'open',
+     created_at INTEGER NOT NULL
+   );`,
 ];
 
 /** Open (or create) the SQLite database in WAL mode and run any pending migrations. */
