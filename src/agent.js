@@ -127,6 +127,9 @@ export class WazinAgent {
     if (!vendor) {
       issues.push({ code: 'VENDOR_UNKNOWN', message: `${inv.sellerName} (${inv.sellerVat}) is not a registered supplier.`, messageAr: `${inv.sellerName} (${inv.sellerVat}) ليس مورداً مسجلاً.` });
       step('vendor', 'fail', 'Unknown supplier: not in the supplier list.', 'مورد غير معروف: غير موجود في قائمة الموردين.');
+    } else if (!this.skip.has('bank') && inv.iban && !vendor.iban) {
+      issues.push({ code: 'BANK_DETAILS_CHANGED', message: `${vendor.nameEn} has no verified bank account yet. Treasury must confirm ${maskIban(inv.iban)} with the supplier by phone before anything is paid.`, messageAr: `لا يوجد حساب بنكي موثّق للمورد ${vendor.nameAr || vendor.nameEn} بعد. يجب أن تؤكد الخزينة الحساب ${maskIban(inv.iban)} هاتفياً قبل أي دفع.` });
+      step('vendor', 'fail', 'New supplier: its bank account has not been verified yet.', 'مورد جديد: لم يُوثَّق حسابه البنكي بعد.');
     } else if (!this.skip.has('bank') && inv.iban && inv.iban !== vendor.iban) {
       issues.push({ code: 'BANK_DETAILS_CHANGED', message: `Invoice asks for payment to ${maskIban(inv.iban)}, but the verified account on file is ${maskIban(vendor.iban)}.`, messageAr: `الفاتورة تطلب الدفع إلى ${maskIban(inv.iban)} بينما الحساب الموثّق لدينا ${maskIban(vendor.iban)}.` });
       step('vendor', 'fail', 'The bank account on the invoice is different from the verified one. This is the most common payment fraud.',

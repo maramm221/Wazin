@@ -439,6 +439,7 @@ async function pageHome() {
     h('div', { class: 'page-head' }, h('h1', { text: t('hello', { name: user.name.split(' ')[0] }) }), h('p', { class: 'muted', text: t('signed_in_as', { role: t(`role_${user.role}`) }) })),
     h('section', { class: 'card guide', 'aria-labelledby': 'g_h' }, h('h2', { id: 'g_h', text: t('next_steps') }), h('ol', {}, guide.map((s) => h('li', { text: s })))),
     h('section', { class: 'kpis', 'aria-label': 'Summary' }, kpis.map(([k, v, sub, tone]) => h('div', { class: `kpi tone-${tone}` }, h('span', { class: 'kpi-label', text: t(k) }), h('span', { class: 'kpi-val', text: v }), h('span', { class: 'kpi-sub', text: t(sub) })))),
+    ['treasury', 'finance', 'admin'].includes(user.role) ? await paymentsCard() : null,
     qualityCard(d),
     user.role === 'warehouse' ? await warehousePriorities() : null,
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', { text: t('your_tasks') }), h('span', { class: 'count', text: String(d.myTasks.length) })),
@@ -477,6 +478,26 @@ function qualityCard(d) {
       stat(t('dq_raised'), whole(x.raised), x.open ? t('dq_open_n', { n: x.open }) : null),
       stat(t('dq_after_review'), settled ? pct(x.confirmed / settled) : '—', settled ? t('dq_settled', { right: x.confirmed, n: settled }) : t('dq_none'))),
     h('p', { class: 'muted small', text: t('dq_lead') }));
+}
+
+// ---------------------------------------------------------------- payments
+// What is scheduled to be paid, and the file Treasury uploads to the company's online banking. Wazin never moves money.
+async function paymentsCard() {
+  const { pending, sent } = await api('GET', '/api/payments');
+  const issue = ['treasury', 'admin'].includes(state.me.user.role);
+  const total = pending.reduce((a, r) => a + (r.amount || 0), 0);
+  return h('section', { class: 'card', 'aria-labelledby': 'pay_h' },
+    h('div', { class: 'card-head' }, h('h2', { id: 'pay_h', text: t('pay_title') }), h('span', { class: 'count', text: `${t('sar')} ${money(total)}` })),
+    h('ol', { class: 'pay-steps' }, [1, 2, 3].map((n) => h('li', { text: t(`pay_s${n}`) }))),
+    pending.length ? h('div', { class: 'table-wrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, [t('pay_on'), t('col_supplier'), t('col_invoice'), t('pay_account'), t('total')].map((x, i) => h('th', { class: i === 4 ? 'num' : '', text: x })))),
+      h('tbody', {}, pending.slice(0, 8).map((r) => h('tr', {}, h('td', { class: 'num', text: r.payOn || '—' }), h('td', { text: r.supplier || '—' }),
+        h('td', {}, h('a', { href: `#/invoice/${encodeURIComponent(r.id)}`, text: r.invoiceNumber || r.id })), h('td', { class: 'num', text: r.iban || t('not_verified') }), h('td', { class: 'num', text: money(r.amount) })))))) : h('p', { class: 'empty-inline', text: t('pay_none') }),
+    pending.length > 8 ? h('p', { class: 'muted small', text: t('pay_more', { n: pending.length - 8 }) }) : null,
+    h('div', { class: 'row wrap' },
+      issue && pending.length ? h('a', { class: 'btn primary', href: '/api/export/ledger.csv', download: '', onclick: () => setTimeout(render, 800), text: t('pay_download', { n: pending.length }) }) : null,
+      h('a', { class: 'btn small ghost', href: '/api/export/ledger.csv?scope=all', download: '', text: t('pay_history') }),
+      sent ? h('span', { class: 'muted small', text: t('pay_sent', { n: sent }) }) : null));
 }
 
 // ---------------------------------------------------------------- warehouse
@@ -830,7 +851,32 @@ async function pageOrders() {
           onclick: async () => area.replaceChildren(deliveryReportCard(await api('GET', `/api/goods-receipts/${encodeURIComponent(g.grnNumber)}`))) })) : null),
       area);
   };
-  return h('div', { class: 'stack' }, h('div', { class: 'page-head' }, h('h1', { text: t('orders_title') }), h('p', { class: 'muted', text: t('orders_lead') })),
+  // Procurement can raise a purchase order by hand (companies without an accounting system to import from).
+  const canOrder = ['procurement', 'admin'].includes(state.me.user.role);
+  const newArea = h('div', {});
+  const newForm = () => {
+    const err = formError();
+    const num = h('input', { type: 'text', maxlength: 40, required: true, placeholder: 'PO-2026-2001' });
+    const ven = h('select', { required: true }, h('option', { value: '', text: t('choose_supplier') }), sup.map((v) => h('option', { value: v.vat, text: pick(v.nameEn, v.nameAr) })));
+    const box = h('div', { class: 'lines-edit' });
+    const add = () => box.append(h('div', { class: 'line-row' },
+      h('input', { type: 'text', 'aria-label': t('sku'), placeholder: t('sku') }), h('input', { type: 'text', 'aria-label': t('item'), placeholder: t('item') }),
+      h('input', { type: 'number', min: 1, step: 1, 'aria-label': t('qty'), placeholder: t('qty') }), h('input', { type: 'number', min: 0, step: '0.01', 'aria-label': t('unit_price'), placeholder: t('unit_price') })));
+    add();
+    const f = h('form', { class: 'card form', novalidate: true }, h('h2', { text: t('new_po') }),
+      h('div', { class: 'grid2' }, formField(t('po'), num), formField(t('col_supplier'), ven)),
+      h('fieldset', {}, h('legend', { text: t('lines') }), box, h('button', { type: 'button', class: 'btn small', onclick: add, text: '+' })), err,
+      h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'submit', text: t('save') }), h('button', { class: 'btn ghost', type: 'button', onclick: () => newArea.replaceChildren(), text: t('cancel') })));
+    f.onsubmit = async (e) => {
+      e.preventDefault(); err.hidden = true;
+      const lines = [...box.children].map((r) => { const [a, b, c, d] = r.querySelectorAll('input'); return { sku: a.value, name: b.value, qty: Number(c.value), unitPrice: Number(d.value) }; }).filter((l) => l.name);
+      try { await api('POST', '/api/purchase-orders', { poNumber: num.value, vendorVat: ven.value, lines }); toast(t('po_saved')); render(); } catch (x) { showErr(err, x); }
+    };
+    return f;
+  };
+  return h('div', { class: 'stack' }, h('div', { class: 'page-head' }, h('h1', { text: t('orders_title') }), h('p', { class: 'muted', text: t('orders_lead') }),
+      canOrder ? h('div', {}, h('button', { type: 'button', class: 'btn primary', onclick: () => { newArea.replaceChildren(newForm()); newArea.querySelector('input')?.focus(); }, text: t('new_po') })) : null),
+    newArea,
     wh ? await warehousePriorities(wh) : null, wh ? supplierHistory(wh) : null,
     pos.length ? h('ul', { class: 'po-list' }, pos.map(card)) : h('p', { class: 'card muted-card', text: t('no_orders') }));
 }
@@ -873,7 +919,7 @@ async function pageSuppliers() {
       h('thead', {}, h('tr', {}, [t('col_supplier'), t('vat_number'), t('iban'), t('terms'), ''].map((x) => h('th', { text: x })))),
       h('tbody', {}, rows.map((s) => h('tr', {},
         h('td', {}, h('b', { text: pick(s.nameEn, s.nameAr) }), h('br'), h('span', { class: 'muted small', text: pick(s.nameAr, s.nameEn) })),
-        h('td', { class: 'num', text: s.vat }), h('td', { class: 'num', text: s.iban }),
+        h('td', { class: 'num', text: s.vat }), h('td', { class: 'num', text: s.iban || t('not_verified') }),
         h('td', { class: 'num', text: `${s.paymentTermsDays}${s.earlyPayDiscount ? ` · ${s.earlyPayDiscount.pct}%/${s.earlyPayDiscount.days}` : ''}` }),
         h('td', {}, canEdit ? h('button', { class: 'btn small', type: 'button', onclick: () => { area.replaceChildren(form(s)); window.scrollTo({ top: 0, behavior: 'smooth' }); }, text: t('edit') }) : null)))))))
       : h('p', { class: 'card muted-card', text: t('no_suppliers') }));
@@ -971,7 +1017,7 @@ async function pageSettings() {
   };
   const imports = h('section', { class: 'card' }, h('h2', { text: t('import_title') }), h('p', { class: 'muted', text: t('import_lead') }),
     imp('vendors', t('import_vendors'), 'suppliers.csv'), imp('purchase_orders', t('import_pos'), 'purchase-orders.csv'), imp('goods_receipts', t('import_grns'), 'goods-receipts.csv'),
-    h('p', {}, h('a', { class: 'btn', href: '/api/export/ledger.csv', download: 'wazin-ledger.csv', text: t('export_ledger') })));
+    h('p', {}, h('a', { class: 'btn', href: '/api/export/ledger.csv?scope=all', download: '', text: t('pay_history') })));
 
   return h('div', { class: 'stack' }, h('div', { class: 'page-head' }, h('h1', { text: t('settings_title') })), wForm, coForm, team, imports);
 }

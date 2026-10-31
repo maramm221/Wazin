@@ -421,3 +421,5 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 6px 0; width: 100
 tr.has-issue td { background: var(--crit-soft); }
 .row.wrap { flex-wrap: wrap; }
 @media print { .side, .topbar, .utility, .crumbs, .po-list > li:not(:has(.report)) { display: none !important; } }
+
+.pay-steps { margin: 4px 0 12px; padding-inline-start: 1.3em; color: var(--muted); display: grid; gap: 4px; }

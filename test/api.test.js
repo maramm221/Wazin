@@ -76,6 +76,19 @@ describe('the full hand-off flow in a seeded company', () => {
     assert.equal(r.body.actions.length, 0);
     const again = await c.call('POST', '/api/invoices/WZN-00004/approve', {});
     assert.equal(again.status, 403, 'cannot approve twice');
+    // The payment appears in "Payments to make"; Finance sees only the last 4 digits of the verified account.
+    const pay = (await c.call('GET', '/api/payments')).body.pending.find((x) => x.id === 'WZN-00004');
+    assert.match(pay.iban, /^•••• \d{4}$/);
+    await c.as('treasury');
+    assert.match((await c.call('GET', '/api/payments')).body.pending.find((x) => x.id === 'WZN-00004').iban, /^SA\d{22}$/);
+    // Treasury's payment file hands each payment to the bank once: a second download never repeats it.
+    const first = await c.call('GET', '/api/export/ledger.csv');
+    assert.match(first.body, /WZN-00004/);
+    assert.doesNotMatch((await c.call('GET', '/api/export/ledger.csv')).body, /WZN-00004/);
+    assert.equal((await c.call('GET', '/api/payments')).body.pending.length, 0);
+    assert.match((await c.call('GET', '/api/export/ledger.csv?scope=all')).body, /WZN-00004/);
+    await c.as('warehouse');
+    assert.equal((await c.call('GET', '/api/payments')).status, 403);
   });
 
   test('warehouse records the delivery; the parked invoice is paid with no one asking', async () => {
@@ -126,6 +139,12 @@ describe('the full hand-off flow in a seeded company', () => {
     await c.as('procurement');
     const r = await c.call('POST', '/api/invoices/WZN-00008/amend_po', { note: 'Price increase agreed by phone' });
     assert.equal(r.body.status, 'APPROVED_AUTO');
+    // Procurement can also raise a new order by hand; numbers are unique and the supplier must exist.
+    const vat = (await c.call('GET', '/api/suppliers')).body[0].vat;
+    const po = await c.call('POST', '/api/purchase-orders', { poNumber: 'po 2026 7001', vendorVat: vat, lines: [{ name: 'Desk lamp', qty: 4, unitPrice: 85 }] });
+    assert.equal(po.body.poNumber, 'PO-2026-7001');
+    assert.equal((await c.call('POST', '/api/purchase-orders', { poNumber: 'PO-2026-7001', vendorVat: vat, lines: [{ name: 'x', qty: 1, unitPrice: 1 }] })).status, 409);
+    assert.equal((await c.call('POST', '/api/purchase-orders', { poNumber: 'PO-2026-7002', vendorVat: '300000000000003', lines: [{ name: 'x', qty: 1, unitPrice: 1 }] })).body.error, 'vendor_not_found');
   });
 
   test('rejecting needs a reason; anyone can dispute a decision and the Finance Manager settles it', async () => {
@@ -217,7 +236,7 @@ describe('the full hand-off flow in a seeded company', () => {
 
   test('ledger export is CSV with formula injection neutralised', async () => {
     await c.as('finance');
-    const r = await fetch(`${t.base}/api/export/ledger.csv`, { headers: { cookie: c.cookie } });
+    const r = await fetch(`${t.base}/api/export/ledger.csv?scope=all`, { headers: { cookie: c.cookie } });
     assert.equal(r.status, 200);
     assert.match(r.headers.get('content-type'), /text\/csv/);
     const text = await r.text();

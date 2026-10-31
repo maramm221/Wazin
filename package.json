@@ -17,6 +17,7 @@
     "stress": "node eval/stress.js",
     "heldout": "node eval/heldout.js",
     "realistic": "node eval/realistic.js",
+    "latency": "node --disable-warning=ExperimentalWarning eval/latency.js",
     "demo": "node cli.js"
   }
 }

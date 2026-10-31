@@ -60,6 +60,10 @@ Results in [`eval/REALISTIC.md`](../eval/REALISTIC.md). The generated benchmark 
 - **Outcomes** are split into correct, sent to a person, held (safe), misrouted (safe) and paid wrongly (unsafe).
 - **Iteration:** the first run (saved in `eval/realistic-v1.json`) found three formatting cases treated as problems. They were fixed, regression checks were added to `test/agent.test.js` and `test/extract.test.js`, and the hard set was regenerated from a new seed to confirm the gain was not tuned to one sample. Remaining gaps are listed in the report.
 
+## Speed (`npm run latency`)
+
+Results in [`eval/LATENCY.md`](../eval/LATENCY.md): the agent's decision time over 300 invoices of every kind, an upload through the web server (sign-in check, decision, encryption, saving) and the dashboard. Measured on the server; network time is extra.
+
 ## Trying it by hand
 
 `WAZIN_SEED_PASSWORD="choose-a-password-1" npm start`, open http://localhost:3000 and sign in as each team (`ap@sahara.example`, `treasury@sahara.example` and so on; see the README).

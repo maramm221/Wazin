@@ -345,6 +345,7 @@ export class Service {
           if (!kind) throw bad('dispute_kind_required');
           if (!note) throw bad('reason_required');
           const from = rec.status;
+          if (from === 'APPROVED_AUTO' && this.s.ledgerEntry(org.id, rec.id)?.exportedAt) throw bad('already_sent_to_bank');
           this.s.tx(() => {
             if (from === 'APPROVED_AUTO') this.s.unpost(org.id, rec.id); // hold the scheduled payment
             Object.assign(rec, { status: 'DISPUTED', owner: 'FINANCE_MANAGER' });
@@ -418,11 +419,14 @@ export class Service {
         case 'add_vendor': {
           const inv = rec.result.invoice;
           if (!isValidSaudiVat(inv.sellerVat)) throw bad('invalid_vat');
-          const v = { vat: inv.sellerVat, nameEn: str(body.nameEn, 120) || inv.sellerName, nameAr: str(body.nameAr, 120), iban: iban(body.iban || inv.iban), phone: str(body.phone, 40), email: str(body.email, 254), paymentTermsDays: 30 };
+          // A bank account copied from an invoice is never trusted on its own: unless Treasury adds the supplier,
+          // the account stays unverified and the invoice is blocked until Treasury confirms it by phone.
+          const verified = can(ctx.user, 'treasury');
+          const v = { vat: inv.sellerVat, nameEn: str(body.nameEn, 120) || inv.sellerName, nameAr: str(body.nameAr, 120), iban: verified ? iban(body.iban || inv.iban) : '', phone: str(body.phone, 40), email: str(body.email, 254), paymentTermsDays: 30 };
           if (!v.phone) throw bad('phone_required');
           this.s.tx(() => {
             this.s.upsertVendor(org.id, v);
-            this.s.audit(org.id, who, 'supplier.added', v.vat, { name: v.nameEn, note: note || undefined });
+            this.s.audit(org.id, who, 'supplier.added', v.vat, { name: v.nameEn, bankVerified: verified, note: note || undefined });
           });
           await rerun(rec.doc, 'invoice.rechecked_after_supplier_added', note);
           break;
@@ -594,6 +598,30 @@ export class Service {
     return { priorities: priorities.slice(0, 8), suppliers };
   }
 
+  /** Procurement (or the administrator) creates a purchase order by hand, for companies without an accounting system to import from. */
+  createPO(ctx, { poNumber, vendorVat, lines }) {
+    if (!can(ctx.user, 'procurement')) throw forbidden();
+    const n = str(poNumber, 40).toUpperCase().replace(/\s+/g, '-');
+    if (!/^[A-Z0-9][A-Z0-9/_-]{1,39}$/.test(n)) throw bad('invalid_po_number');
+    if (this.s.getPO(ctx.org.id, n)) throw new AppError(409, 'po_exists');
+    const vendor = this.s.getVendor(ctx.org.id, str(vendorVat, 15));
+    if (!vendor) throw bad('vendor_not_found');
+    if (!Array.isArray(lines) || !lines.length || lines.length > 100) throw bad('lines_required');
+    const clean = lines.map((l, i) => {
+      const name = str(l.name, 120), qty = Number(l.qty), unitPrice = Number(l.unitPrice);
+      if (!name) throw bad('name_required');
+      if (!Number.isInteger(qty) || qty < 1 || qty > 1e6) throw bad('invalid_quantity');
+      if (!(unitPrice > 0 && unitPrice < 1e9)) throw bad('invalid_price');
+      return { sku: str(l.sku, 40) || `L${i + 1}`, name, qty, unitPrice: round2(unitPrice) };
+    });
+    const po = { poNumber: n, vendorVat: vendor.vat, buyer: ctx.user.email, lines: clean };
+    this.s.tx(() => {
+      this.s.upsertPO(ctx.org.id, po);
+      this.s.audit(ctx.org.id, ctx.user.email, 'po.created', n, { supplier: vendor.nameEn, lines: clean.length });
+    });
+    return po;
+  }
+
   // ======================= suppliers =======================
   listVendors(ctx) {
     const reveal = can(ctx.user, 'treasury');
@@ -613,7 +641,9 @@ export class Service {
       if (!can(ctx.user, 'treasury')) throw new AppError(403, 'treasury_only_bank');
       ib = iban(body.iban);
     }
-    if (!ib) throw bad('invalid_iban');
+    // Procurement may register a supplier without a bank account; Treasury adds and verifies it later.
+    if (!ib && can(ctx.user, 'treasury')) throw bad('invalid_iban');
+    ib = ib || '';
     const pct = Number(body.discountPct || 0), days = Number(body.discountDays || 0), terms = Number(body.paymentTermsDays || 30);
     if (!(pct >= 0 && pct <= 20) || !Number.isInteger(days) || days < 0 || days > 365 || !Number.isInteger(terms) || terms < 0 || terms > 365) throw bad('invalid_terms');
     const v = { vat, nameEn, nameAr: str(body.nameAr, 120), iban: ib, phone: str(body.phone, 40), email: str(body.email, 254), paymentTermsDays: terms, earlyPayDiscount: pct > 0 ? { pct, days } : null };

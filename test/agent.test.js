@@ -125,6 +125,10 @@ test('unknown PO and unknown vendor are routed to procurement', async () => {
   const r = await setup().process(renderUBL(makeInvoice({ sellerName: 'Ghost Trading', sellerVat: '399999999999993' })));
   assert.ok(r.reasonCodes.includes('VENDOR_UNKNOWN'));
   assert.equal(r.owner, 'PROCUREMENT');
+  // Once Procurement registers the supplier, its bank account is still unverified: payment waits for Treasury's call.
+  const erp = new ERP({ vendors: [...VENDORS, { ...V, vat: '399999999999993', nameEn: 'Ghost Trading', iban: '' }], purchaseOrders: [PO], goodsReceipts: [GRN] });
+  const r2 = await new WazinAgent(erp).process(renderUBL(makeInvoice({ sellerName: 'Ghost Trading', sellerVat: '399999999999993' })));
+  assert.deepEqual([r2.decision, r2.owner, r2.reasonCodes], ['BLOCKED', 'TREASURY', ['BANK_DETAILS_CHANGED']]);
 });
 
 test('multiple simultaneous problems are ALL reported; the riskiest decides the route', async () => {

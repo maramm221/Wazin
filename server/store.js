@@ -217,6 +217,12 @@ export class Store {
   post(org, entry) {
     this.#p('INSERT OR REPLACE INTO ledger (org_id,invoice_id,entry_json,created_at) VALUES (?,?,?,?)').run(org, entry.id, JSON.stringify(entry), now());
   }
+  ledgerEntry(org, invoiceId) { const r = this.#p('SELECT entry_json FROM ledger WHERE org_id = ? AND invoice_id = ?').get(org, invoiceId); return r && JSON.parse(r.entry_json); }
+  /** Mark scheduled payments as handed to the bank, so the next payment file never repeats them. */
+  markExported(org, entries, ts) {
+    const st = this.#p('UPDATE ledger SET entry_json = ? WHERE org_id = ? AND invoice_id = ?');
+    for (const e of entries) st.run(JSON.stringify({ ...e, exportedAt: ts }), org, e.id);
+  }
   /** Remove a scheduled payment (used when a paid-automatically decision is disputed). */
   unpost(org, invoiceId) { this.#p('DELETE FROM ledger WHERE org_id = ? AND invoice_id = ?').run(org, invoiceId); }
   disputeCounts(org) {

@@ -189,6 +189,7 @@ export function createApp(opts = {}) {
   route('GET', '/api/invoices/:id', (ctx, r, p) => service.view(ctx, p.id));
   route('POST', '/api/invoices/:id/:action', (ctx, r, p, b) => service.act(ctx, p.id, p.action, b), { limit: ['action', 120, 60e3] });
   route('GET', '/api/purchase-orders', (ctx) => service.listPOs(ctx));
+  route('POST', '/api/purchase-orders', (ctx, r, p, b) => service.createPO(ctx, b));
   route('POST', '/api/goods-receipts', (ctx, r, p, b) => service.recordReceipt(ctx, b));
   route('GET', '/api/goods-receipts/:grn', (ctx, r, p) => service.deliveryReport(ctx, p.grn));
   route('GET', '/api/warehouse', (ctx) => service.warehouseOverview(ctx));
@@ -200,15 +201,36 @@ export function createApp(opts = {}) {
   route('POST', '/api/users', (ctx, r, p, b) => service.addUser(ctx, b));
   route('POST', '/api/users/:id/remove', (ctx, r, p) => (service.removeUser(ctx, p.id), { ok: true }));
   route('POST', '/api/settings', (ctx, r, p, b) => (service.updateSettings(ctx, b), service.me(service.authenticate(ctx.token))));
+  // Scheduled payments for Treasury: what goes in the next payment file (the bank makes the transfer).
+  const accountFor = (ctx) => {
+    const full = ['admin', 'treasury'].includes(ctx.user.role);
+    return (vat) => { const v = store.getVendor(ctx.org.id, vat)?.iban || ''; return full ? v : v ? `•••• ${v.slice(-4)}` : ''; };
+  };
+  route('GET', '/api/payments', (ctx) => {
+    if (!['admin', 'finance', 'treasury'].includes(ctx.user.role)) throw new AppError(403, 'forbidden');
+    const acc = accountFor(ctx);
+    const all = store.ledger(ctx.org.id);
+    const pending = all.filter((e) => !e.exportedAt).map((e) => ({ id: e.id, invoiceNumber: e.invoiceNumber, supplier: e.vendor, amount: e.payAmount ?? e.total, payOn: e.payOn, iban: acc(e.vendorVat) }))
+      .sort((a, b) => String(a.payOn).localeCompare(String(b.payOn)));
+    return { pending, sent: all.length - pending.length };
+  });
+  // The payment file. By default it holds only payments not yet handed to the bank, and marks them as handed over,
+  // so downloading again can never pay a supplier twice. ?scope=all re-downloads the full history for records.
   route('GET', '/api/export/ledger.csv', (ctx, req, p, b, res) => {
     if (!['admin', 'finance', 'treasury'].includes(ctx.user.role)) throw new AppError(403, 'forbidden');
-    const rows = store.ledger(ctx.org.id);
-    const head = ['invoice_id', 'invoice_number', 'supplier', 'supplier_vat', 'po_number', 'amount_ex_vat', 'input_vat', 'total', 'pay_amount', 'pay_on', 'posted_by'];
-    const lines = [head.join(','), ...rows.map((e) => [e.id, e.invoiceNumber, e.vendor, e.vendorVat, e.poNumber, e.amountExVat, e.inputVat, e.total, e.payAmount, e.payOn, e.postedBy].map(csvCell).join(','))];
-    store.audit(ctx.org.id, ctx.user.email, 'ledger.exported', null, { rows: rows.length });
-    headers(res, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="wazin-ledger.csv"', 'Cache-Control': 'no-store' });
+    const history = new URL(req.url, 'http://x').searchParams.get('scope') === 'all';
+    const issue = !history && ['admin', 'treasury'].includes(ctx.user.role); // only Treasury hands payments to the bank
+    const acc = accountFor(ctx);
+    const all = store.ledger(ctx.org.id);
+    const rows = history ? all : all.filter((e) => !e.exportedAt);
+    const ts = new Date().toISOString();
+    if (issue && rows.length) store.markExported(ctx.org.id, rows, ts);
+    const head = ['invoice_id', 'invoice_number', 'supplier', 'supplier_vat', 'po_number', 'amount_ex_vat', 'input_vat', 'total', 'pay_amount', 'pay_on', 'beneficiary_iban', 'posted_by', 'sent_to_bank'];
+    const lines = [head.join(','), ...rows.map((e) => [e.id, e.invoiceNumber, e.vendor, e.vendorVat, e.poNumber, e.amountExVat, e.inputVat, e.total, e.payAmount, e.payOn, acc(e.vendorVat), e.postedBy, e.exportedAt || (issue ? ts : '')].map(csvCell).join(','))];
+    store.audit(ctx.org.id, ctx.user.email, 'ledger.exported', null, { rows: rows.length, scope: history ? 'all' : 'new', handedToBank: issue });
+    headers(res, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="wazin-payments-${ts.slice(0, 10)}.csv"`, 'Cache-Control': 'no-store' });
     res.writeHead(200);
-    res.end(`﻿${lines.join('\r\n')}\r\n`);
+    res.end(`\ufeff${lines.join('\r\n')}\r\n`);
     return undefined;
   });
 

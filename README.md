@@ -30,7 +30,7 @@ A **web application** (software as a service). People use it in a browser on a c
 |---|---|
 | Accounts Payable | Upload invoices, fix unreadable ones, send supplier corrections |
 | Finance Manager | Approve invoices above the automatic limit |
-| Procurement | Settle price differences: amend the order or reject the invoice |
+| Procurement | Raise purchase orders, settle price differences (amend the order or reject), register new suppliers (their bank account stays unverified until Treasury confirms it) |
 | Warehouse | See which delivery to receive first, record what arrived and what is damaged, get a delivery report |
 | Treasury | Verify bank-account changes by call-back; manage supplier bank details |
 | Administrator | Import data, add people, set the approval limit |
@@ -65,6 +65,7 @@ npm run eval         # 300-invoice benchmark  -> eval/RESULTS.md
 npm run stress       # 3,000-invoice stress test -> eval/STRESS.md
 npm run heldout      # unseen data, messy inputs, ablation, settings -> eval/HELDOUT.md
 npm run realistic    # balanced classes + 15 hard real-world cases, with errors -> eval/REALISTIC.md
+npm run latency      # speed of a decision and of an upload -> eval/LATENCY.md
 npm run demo         # the 13-invoice demo in the terminal, no browser
 ```
 
@@ -116,6 +117,10 @@ test/       88 automated tests
 
 **Zero runtime dependencies.** Node's built-in `http`, `crypto` and `sqlite`. Nothing to patch from third parties.
 
+## How payment works
+
+Wazin decides and schedules payments; it does not move money itself. A correct invoice is posted to the company's ledger with the amount and the date to pay (early enough to take any discount). Treasury sees every scheduled payment in **Payments to make** on the dashboard (Finance and the administrator see it too), downloads the **payment file** (CSV; each payment goes into one file only, so a second download can never pay a supplier twice, and a paid invoice can no longer be disputed) and uploads it to the company's online banking (bulk payments) or accounting system, which makes the transfers. The beneficiary account in that file is always the **verified** one on the supplier record, never one typed on an invoice, and only Treasury can change it, after a call-back on the number on file. A direct bank connection is a next step.
+
 ## For the warehouse
 
 The warehouse gets its own help: a **Receive these first** list (deliveries with money or discounts waiting on them), damaged units recorded at the door and never paid, a printable **delivery report** with a ready-to-send message to the supplier, and a **delivery history by supplier**.
@@ -140,6 +145,7 @@ Ten ready-made invoices for the reference company are in [`public/samples/`](pub
 | **Ablation:** switching off any one check | **12–64 wrong payments, SAR 169K–808K paid wrongly** (so each check earns its place) |
 | **Realistic, balanced:** 550 invoices, all 11 situations equally often | **92.4% handled without a person, all of those correct** |
 | **Realistic, hard cases:** 340 invoices in 15 situations the rules were not built for (new seed) | **70.6% correct**; most misses are safe holds for a person; **one unsafe gap** (a large order split into two invoices under the approval limit) |
+| Speed (eval/LATENCY.md) | **about 0.5 ms per decision**, about 3 ms per upload through the server (decide, encrypt, save) |
 | Iteration: hard-case accuracy before → after fixing three findings | **57.1% → 70.0%** (confirmed 70.6% on a fresh seed) |
 
 The generated benchmark is synthetic and built from the same rules Wazin enforces, so its perfect scores prove the logic, not real-world accuracy. The realistic set (`eval/REALISTIC.md`) adds situations Wazin was not designed for and reports every mistake. In real use, anyone can **dispute** a decision; the dashboard counts how often Wazin was right after review, which is the measure a pilot would track.
