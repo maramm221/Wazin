@@ -1,0 +1,12 @@
+Subject: invoice for your order
+
+Hello Sahara team,
+
+Hope you are well. Please find below our invoice DLC-8790 dated 2026-10-28 against your purchase order PO-2026-1211.
+We delivered 80 × Warehouse storage (pallet-week) (LOG-STR) at 45.00 each, 6 × Pallet delivery Riyadh–Dammam (LOG-PAL) at 260.00 each.
+That comes to 5,160.00 before tax, plus 774.00 VAT, so 5,934.00 SAR in total.
+For your records our VAT registration is 311987654300003 and payment goes to SA2705000068201234567000.
+QR payload ARREYW1tYW0gTG9naXN0aWNzIENvLgIPMzExOTg3NjU0MzAwMDAzAxMyMDI2LTEwLTI4VDEwOjE1OjAwBAc1OTM0LjAwBQY3NzQuMDA=
+
+Best regards,
+Dammam Logistics Co.

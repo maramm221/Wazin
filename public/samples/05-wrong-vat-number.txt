@@ -1,0 +1,15 @@
+TAX INVOICE / فاتورة ضريبية
+Invoice No / رقم الفاتورة: HCF-2019
+Date / التاريخ: 2026-10-22 10:15
+Seller / المورد: Hejaz Cleaning & Facilities | الحجاز للنظافة والمرافق
+Seller VAT / الرقم الضريبي: 1010123456
+Buyer / العميل: Sahara Retail Co.
+PO / أمر الشراء: PO-2026-1206
+IBAN: SA5530400108012345670011
+Items / البنود:
+- FAC-CLN | Office cleaning (monthly) | 1 x 6800.00
+- FAC-AC | AC maintenance visit | 6 x 350.00
+Subtotal / المجموع: 8,900.00
+VAT 15% / ضريبة القيمة المضافة: 1,335.00
+Total / الإجمالي: 10,235.00 SAR
+QR: ARtIZWpheiBDbGVhbmluZyAmIEZhY2lsaXRpZXMCCjEwMTAxMjM0NTYDEzIwMjYtMTAtMjJUMTA6MTU6MDAECDEwMjM1LjAwBQcxMzM1LjAw

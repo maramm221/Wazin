@@ -101,6 +101,14 @@ test/       88 automated tests
 
 **Zero runtime dependencies.** Node's built-in `http`, `crypto` and `sqlite`. Nothing to patch from third parties.
 
+## For the warehouse
+
+The warehouse gets its own help: a **Receive these first** list (deliveries with money or discounts waiting on them), damaged units recorded at the door and never paid, a printable **delivery report** with a ready-to-send message to the supplier, and a **delivery history by supplier**.
+
+## Sample invoices
+
+Ten ready-made invoices for the reference company are in [`public/samples/`](public/samples/) and on the **New invoice** page of the live site (Use or Download): paid automatically, Arabic text, needs approval, new bank account, wrong VAT number, price above the order, billed more than arrived, waiting for goods, QR mismatch and a free-text email. Upload the first one twice to see a duplicate blocked.
+
 ## Measured results
 
 | | Result |

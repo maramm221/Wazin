@@ -15,7 +15,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
 const MAX_BODY = 1024 * 1024;
 const COOKIE = 'wz_session';
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.csv': 'text/csv; charset=utf-8', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.csv': 'text/csv; charset=utf-8', '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8' };
 
 const CSP = [
   "default-src 'self'", "script-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com",
@@ -190,6 +190,8 @@ export function createApp(opts = {}) {
   route('POST', '/api/invoices/:id/:action', (ctx, r, p, b) => service.act(ctx, p.id, p.action, b), { limit: ['action', 120, 60e3] });
   route('GET', '/api/purchase-orders', (ctx) => service.listPOs(ctx));
   route('POST', '/api/goods-receipts', (ctx, r, p, b) => service.recordReceipt(ctx, b));
+  route('GET', '/api/goods-receipts/:grn', (ctx, r, p) => service.deliveryReport(ctx, p.grn));
+  route('GET', '/api/warehouse', (ctx) => service.warehouseOverview(ctx));
   route('GET', '/api/suppliers', (ctx) => service.listVendors(ctx));
   route('POST', '/api/suppliers', (ctx, r, p, b) => service.saveVendor(ctx, b));
   route('POST', '/api/import/:kind', (ctx, r, p, b) => service.importCSV(ctx, p.kind, b.csv));

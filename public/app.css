@@ -399,3 +399,25 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 6px 0; width: 100
 .c-done { padding: 16px; border: 1px solid var(--line); border-radius: 10px; }
 .c-done h3 { margin: 0 0 6px; }
 .c-form[hidden], .c-done[hidden] { display: none; }
+
+/* New invoice: sample invoices */
+.samples { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
+.samples li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.samples li:last-child { border-bottom: 0; }
+.smp-act { display: flex; gap: 8px; }
+
+/* Decision quality */
+.quality .q-sub { font-size: .95rem; margin: 12px 0 6px; color: var(--muted); font-weight: 600; }
+.q-grid { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.q-grid li { background: var(--sunk); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+.q-grid b { font-size: 1.4rem; }
+/* Warehouse */
+.wh-list { margin: 0; padding-inline-start: 1.2em; display: grid; gap: 0; }
+.wh-list li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.wh-list li:last-child { border-bottom: 0; }
+.wh-list li > div:first-child p { margin: 2px 0 0; }
+.wh-why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+tr.has-issue td { background: var(--crit-soft); }
+.row.wrap { flex-wrap: wrap; }
+@media print { .side, .topbar, .utility, .crumbs, .po-list > li:not(:has(.report)) { display: none !important; } }

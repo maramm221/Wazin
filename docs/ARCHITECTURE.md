@@ -65,10 +65,10 @@ The agent is the same code in the web app, the command-line demo (`cli.js`), the
 | `sessions` | SHA-256 of each session token, CSRF token, expiry | none (hash only) |
 | `vendors` | Suppliers, VAT number, verified bank account, contacts | bank account, phone, email |
 | `purchase_orders` | Orders and their lines | none |
-| `goods_receipts` | What the warehouse recorded | none |
+| `goods_receipts` | What the warehouse recorded: per line the units that arrived, how many were damaged, and the accepted quantity used for matching | none (quantities only) |
 | `invoices` | Original document, agent result, history, status, owner | document, result and history |
 | `ledger` | Approved invoices and payment dates | none |
-| `audit` | Hash-chained activity log | details |
+| `audit` | Hash-chained activity log (indexed by company and action, so decision and dispute counts are cheap) | details |
 | `support_requests` | Requests from the Help page, with a reference number (`WZ-YYMMDD-XXXXXX`) and topic | sender name and email, message |
 
 Every query is scoped by `org_id`; `Store` methods take the company id as their first argument, so one company can never read another's rows. Encrypted values use the company id and field name as additional authenticated data, so a value copied to another company or column fails to decrypt.
@@ -111,3 +111,14 @@ The agent reads them through the ERP adapter's optional `policy()` method, so th
 - Every file starts with a comment saying what it is for; exported functions carry a one-line doc comment.
 - Money is rounded with `round2` and compared with a tolerance, never with `===` on floats.
 - Errors that reach the browser are `AppError(status, code)`; the web app shows the matching `e_<code>` message in the user's language.
+
+## Warehouse assistant (`Service.recordReceipt`, `deliveryReport`, `warehouseOverview`)
+
+- **Receive these first:** open orders with goods still to arrive, ranked so that deliveries with invoices (and early-payment discounts) waiting on them come first.
+- **Recording a delivery:** for each line the warehouse enters how many arrived and how many are damaged. Only undamaged units, up to the ordered quantity, count as received, so a damaged or over-delivered unit can never be paid. Every invoice waiting on the order is re-checked at once.
+- **Delivery report:** ordered, received before, arrived, damaged, accepted and still to come per line, with a bilingual message to the supplier when goods are damaged or over-delivered. It can be reopened later and printed.
+- **Delivery history by supplier:** deliveries, units arrived and damaged, over-deliveries and invoices billed for more than arrived, computed from the goods receipts.
+
+## Decision quality (dashboard)
+
+Live numbers come from the company's own data: decisions made, paid with no person, disputes raised and how they were settled (`invoice.dispute_confirmed` / `invoice.dispute_corrected` in the activity log). The measured test results are read once at start-up from `eval/heldout.json` and `eval/realistic.json`. No new personal data is stored for either.

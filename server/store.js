@@ -133,7 +133,16 @@ export class Store {
       .run(org, g.grnNumber, g.poNumber, JSON.stringify(g.lines), by || null, now());
   }
   getGRNs(org, po) {
-    return this.#p('SELECT * FROM goods_receipts WHERE org_id = ? AND po_number = ? ORDER BY created_at').all(org, po)
+    return this.#p('SELECT * FROM goods_receipts WHERE org_id = ? AND po_number = ? ORDER BY created_at, grn_number').all(org, po)
+      .map((r) => ({ grnNumber: r.grn_number, poNumber: r.po_number, lines: json(r.lines_json, []), receivedBy: r.received_by, createdAt: r.created_at }));
+  }
+  getGRN(org, n) {
+    const r = this.#p('SELECT * FROM goods_receipts WHERE org_id = ? AND grn_number = ?').get(org, String(n));
+    return r && { grnNumber: r.grn_number, poNumber: r.po_number, lines: json(r.lines_json, []), receivedBy: r.received_by, createdAt: r.created_at };
+  }
+  /** Every goods receipt of the company, for the warehouse's supplier history. */
+  listGRNs(org) {
+    return this.#p('SELECT * FROM goods_receipts WHERE org_id = ? ORDER BY created_at, grn_number').all(org)
       .map((r) => ({ grnNumber: r.grn_number, poNumber: r.po_number, lines: json(r.lines_json, []), receivedBy: r.received_by, createdAt: r.created_at }));
   }
   grnExists(org, n) { return !!this.#p('SELECT 1 FROM goods_receipts WHERE org_id = ? AND grn_number = ?').get(org, n); }

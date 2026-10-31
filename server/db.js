@@ -128,6 +128,8 @@ const MIGRATIONS = [
      status TEXT NOT NULL DEFAULT 'open',
      created_at INTEGER NOT NULL
    );`,
+  // 4: count decisions and disputes per company without scanning the whole activity log.
+  `CREATE INDEX audit_action ON audit(org_id, action);`,
 ];
 
 /** Open (or create) the SQLite database in WAL mode and run any pending migrations. */

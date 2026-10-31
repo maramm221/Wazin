@@ -439,7 +439,8 @@ async function pageHome() {
     h('div', { class: 'page-head' }, h('h1', { text: t('hello', { name: user.name.split(' ')[0] }) }), h('p', { class: 'muted', text: t('signed_in_as', { role: t(`role_${user.role}`) }) })),
     h('section', { class: 'card guide', 'aria-labelledby': 'g_h' }, h('h2', { id: 'g_h', text: t('next_steps') }), h('ol', {}, guide.map((s) => h('li', { text: s })))),
     h('section', { class: 'kpis', 'aria-label': 'Summary' }, kpis.map(([k, v, sub, tone]) => h('div', { class: `kpi tone-${tone}` }, h('span', { class: 'kpi-label', text: t(k) }), h('span', { class: 'kpi-val', text: v }), h('span', { class: 'kpi-sub', text: t(sub) })))),
-    disputeCard(d.disputes),
+    qualityCard(d),
+    user.role === 'warehouse' ? await warehousePriorities() : null,
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', { text: t('your_tasks') }), h('span', { class: 'count', text: String(d.myTasks.length) })),
       d.myTasks.length ? invoiceList(d.myTasks) : h('p', { class: 'empty-inline', text: t('no_tasks') })),
     h('section', { class: 'card' }, h('h2', { text: t('team_overview') }),
@@ -462,14 +463,69 @@ function disputeNote(v) {
     h('p', {}, h('b', { text: `${t(`dk_${d.kind}`)}: ` }), d.note || ''));
 }
 
-// How often people disputed Wazin's decisions, and how often Wazin turned out to be right.
-function disputeCard(x = {}) {
+// Decision quality: what Wazin decided in this company, how often people disputed it, and the measured test results.
+function qualityCard(d) {
+  const q = d.quality || {}, x = d.disputes || {}, tested = q.tested;
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  const stat = (label, value, sub) => h('li', {}, h('span', { class: 'kpi-label', text: label }), h('b', { class: 'num', text: value }), sub ? h('span', { class: 'muted small', text: sub }) : null);
   const settled = (x.confirmed || 0) + (x.corrected || 0);
-  const item = (k, v) => h('li', {}, h('span', { class: 'kpi-label', text: t(k) }), h('b', { class: 'num', text: String(v || 0) }));
-  return h('section', { class: 'card', 'aria-labelledby': 'dq_h' },
-    h('div', { class: 'card-head' }, h('h2', { id: 'dq_h', text: t('dq_title') }), settled ? h('span', { class: 'count', text: t('dq_right', { pct: Math.round((100 * x.confirmed) / settled) }) }) : null),
-    h('p', { class: 'muted small', text: t('dq_lead') }),
-    h('ul', { class: 'owners' }, item('dq_raised', x.raised), item('dq_open', x.open), item('dq_confirmed', x.confirmed), item('dq_corrected', x.corrected)));
+  return h('section', { class: 'card quality', 'aria-labelledby': 'dq_h' },
+    h('h2', { id: 'dq_h', text: t('dq_title') }),
+    h('h3', { class: 'q-sub', text: t('dq_live') }),
+    h('ul', { class: 'q-grid' },
+      stat(t('dq_decisions'), whole(q.decisions)),
+      stat(t('dq_no_person'), whole(q.noPerson), q.decisions ? pct(q.noPerson / q.decisions) : null),
+      stat(t('dq_raised'), whole(x.raised), x.open ? t('dq_open_n', { n: x.open }) : null),
+      stat(t('dq_after_review'), settled ? pct(x.confirmed / settled) : '—', settled ? t('dq_settled', { right: x.confirmed, n: settled }) : t('dq_none'))),
+    tested ? h('h3', { class: 'q-sub', text: t('dq_tested') }) : null,
+    tested ? h('ul', { class: 'q-grid' },
+      stat(t('dq_t_heldout'), pct(tested.heldout.handled), t('dq_t_heldout_s', { n: whole(tested.heldout.invoices), w: tested.heldout.wrongPayments })),
+      stat(t('dq_t_balanced'), pct(tested.balanced.handled), t('dq_t_balanced_s', { c: pct(tested.balanced.correctOfHandled) })),
+      stat(t('dq_t_hard'), pct(tested.hard.correct), t('dq_t_hard_s', { n: tested.hard.invoices }))) : null,
+    h('p', { class: 'muted small', text: t('dq_lead') }));
+}
+
+// ---------------------------------------------------------------- warehouse
+async function warehousePriorities(data) {
+  const w = data || await api('GET', '/api/warehouse');
+  return h('section', { class: 'card', 'aria-labelledby': 'wp_h' },
+    h('h2', { id: 'wp_h', text: t('wh_first') }), h('p', { class: 'muted small', text: t('wh_first_lead') }),
+    w.priorities.length ? h('ol', { class: 'wh-list' }, w.priorities.map((p) => h('li', {},
+      h('div', {}, h('b', { class: 'num', text: p.poNumber }), h('span', { text: ` · ${pick(p.supplier, p.supplierAr)}` }),
+        h('p', { class: 'muted small', text: t('wh_outstanding', { n: p.outstanding }) })),
+      h('div', { class: 'wh-why' },
+        p.waitingInvoices ? h('span', { class: 'pill tone-wait', text: t('wh_waiting', { n: p.waitingInvoices, sar: money(p.waitingAmount) }) }) : h('span', { class: 'muted small', text: t('wh_no_invoice') }),
+        p.discount ? h('span', { class: 'pill tone-ok', text: t('wh_discount', { sar: money(p.discount.amount), by: p.discount.by }) }) : null)))) : h('p', { class: 'empty-inline', text: t('wh_none') }));
+}
+
+function supplierHistory(w) {
+  if (!w.suppliers.length) return null;
+  return h('section', { class: 'card', 'aria-labelledby': 'sh_h' },
+    h('h2', { id: 'sh_h', text: t('wh_hist') }), h('p', { class: 'muted small', text: t('wh_hist_lead') }),
+    h('div', { class: 'table-wrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, [t('col_supplier'), t('wh_deliveries'), t('wh_arrived'), t('wh_damaged'), t('wh_over'), t('wh_billed_more')].map((x, i) => h('th', { class: i ? 'num' : '', text: x })))),
+      h('tbody', {}, w.suppliers.map((r) => h('tr', { class: r.issues ? 'has-issue' : '' }, h('td', { text: pick(r.supplier, r.supplierAr) }),
+        ...[r.deliveries, r.unitsArrived, r.unitsDamaged, r.overDelivered, r.billedMoreThanArrived].map((n) => h('td', { class: 'num', text: String(n) }))))))));
+}
+
+/** The delivery report the warehouse gets after recording a delivery (or opens later). */
+function deliveryReportCard(rep) {
+  const f = rep.flags;
+  const chips = h('div', { class: 'chips' },
+    f.damaged ? h('span', { class: 'pill tone-crit', text: t('dr_damaged', { n: f.damaged }) }) : null,
+    f.over ? h('span', { class: 'pill tone-warn', text: t('dr_over', { n: f.over }) }) : null,
+    f.outstanding ? h('span', { class: 'pill tone-wait', text: t('dr_outstanding', { n: f.outstanding }) }) : null,
+    !f.damaged && !f.over && !f.outstanding ? h('span', { class: 'pill tone-ok', text: t('dr_complete') }) : null,
+    ...(rep.resumed || []).map((r) => h('a', { class: `pill tone-${STATUS_TONE[r.status]}`, href: `#/invoice/${encodeURIComponent(r.id)}`, text: `${r.id}: ${t(`st_${r.status}`)}` })));
+  const table = h('div', { class: 'table-wrap' }, h('table', {},
+    h('thead', {}, h('tr', {}, [t('item'), t('ordered'), t('dr_before'), t('dr_arrived'), t('wh_damaged'), t('dr_accepted'), t('dr_still')].map((x, i) => h('th', { class: i ? 'num' : '', text: x })))),
+    h('tbody', {}, rep.lines.map((l) => h('tr', { class: l.damaged || l.over ? 'has-issue' : '' }, h('td', { text: l.name }),
+      ...[l.ordered, l.before, l.arrived, l.damaged, l.accepted, l.over ? `+${l.over}` : l.outstanding].map((n) => h('td', { class: 'num', text: String(n) })))))));
+  return h('div', { class: 'stack report' },
+    h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', { text: t('dr_title', { grn: rep.grnNumber }) }),
+      h('button', { type: 'button', class: 'btn small ghost', onclick: () => window.print(), text: t('dr_print') })),
+      h('p', { class: 'muted small', text: `${rep.poNumber} · ${pick(rep.supplier, rep.supplierAr)}` }), chips, table),
+    rep.message ? messageCard(rep.message) : null);
 }
 
 // ---------------------------------------------------------------- invoices
@@ -630,10 +686,11 @@ function actionForm(v, action, close) {
     const inputs = (po?.lines || []).map((l) => {
       const remaining = Math.max(0, l.qty - (l.received || 0));
       const inp = h('input', { type: 'number', min: 0, step: 1, value: remaining, inputmode: 'numeric' });
-      fields.push(h('div', { class: 'qty-row' }, h('div', {}, h('b', { text: l.name }), h('p', { class: 'muted small', text: `${t('ordered')}: ${l.qty} · ${t('already_received')}: ${l.received || 0}` })), formField(t('received_qty'), inp)));
-      return [l.sku, inp];
+      const dmg = h('input', { type: 'number', min: 0, step: 1, value: 0, inputmode: 'numeric' });
+      fields.push(h('div', { class: 'qty-row' }, h('div', {}, h('b', { text: l.name }), h('p', { class: 'muted small', text: `${t('ordered')}: ${l.qty} · ${t('already_received')}: ${l.received || 0}` })), formField(t('arrived_qty'), inp), formField(t('damaged_qty'), dmg)));
+      return [l.sku, inp, dmg];
     });
-    get.lines = () => inputs.map(([sku, inp]) => ({ sku, qty: Number(inp.value) }));
+    get.lines = () => inputs.map(([sku, inp, dmg]) => ({ sku, qty: Number(inp.value), damaged: Number(dmg.value || 0) }));
     note(false);
   }
   if (action === 'resubmit') {
@@ -703,6 +760,9 @@ function fileInput(onText, errEl) {
 }
 
 // ---------------------------------------------------------------- new invoice
+// Sample invoices in public/samples/, made for the reference company Sahara Trading Co.
+const SAMPLES = [['01-paid-automatically.xml', 'paid'], ['02-arabic-invoice.txt', 'arabic'], ['03-needs-manager-approval.xml', 'approval'], ['04-new-bank-account.xml', 'bank'],
+  ['05-wrong-vat-number.txt', 'vat'], ['06-price-above-order.xml', 'price'], ['07-billed-more-than-received.xml', 'qty'], ['08-waiting-for-goods.xml', 'goods'], ['09-qr-code-mismatch.xml', 'qr'], ['10-free-text-email.txt', 'email']];
 async function pageNew() {
   const err = formError();
   const ta = h('textarea', { rows: 10, class: 'mono', spellcheck: 'false', id: 'new_doc' });
@@ -720,9 +780,19 @@ async function pageNew() {
     } catch (x) { showErr(err, x); btn.disabled = false; status.textContent = ''; }
   };
   const canUpload = ['ap', 'admin'].includes(state.me.user.role);
+  // Ready-made invoices for the reference company: load one into the form, or download it.
+  const samples = h('section', { class: 'card', 'aria-labelledby': 'smp_h' },
+    h('h2', { id: 'smp_h', text: t('smp_title') }), h('p', { class: 'muted small', text: t('smp_lead') }),
+    h('ul', { class: 'samples' }, SAMPLES.map(([file, k]) => h('li', {},
+      h('div', {}, h('b', { text: t(`smp_${k}`) }), h('span', { class: 'muted small', text: ` · ${t(`smp_${k}_r`)}` })),
+      h('div', { class: 'smp-act' },
+        canUpload ? h('button', { type: 'button', class: 'btn small', text: t('smp_use'), onclick: async () => {
+          try { ta.value = await (await fetch(`/samples/${file}`)).text(); ta.focus(); ta.scrollIntoView({ block: 'center' }); } catch { showErr(err, t('e_unknown')); }
+        } }) : null,
+        h('a', { class: 'btn small ghost', href: `/samples/${file}`, download: file, text: t('smp_download') }))))));
   return h('div', { class: 'stack' },
     h('div', { class: 'page-head' }, h('h1', { text: t('new_title') }), h('p', { class: 'muted', text: t('new_lead') })),
-    canUpload ? form : h('p', { class: 'card muted-card', text: t('e_forbidden') }));
+    canUpload ? form : h('p', { class: 'card muted-card', text: t('e_forbidden') }), samples);
 }
 
 // ---------------------------------------------------------------- orders
@@ -730,23 +800,26 @@ async function pageOrders() {
   const [pos, sup] = await Promise.all([api('GET', '/api/purchase-orders'), api('GET', '/api/suppliers')]);
   const names = Object.fromEntries(sup.map((s) => [s.vat, pick(s.nameEn, s.nameAr)]));
   const canRecord = ['warehouse', 'admin'].includes(state.me.user.role) && state.me.org.settings?.matching !== 'two';
+  const seesWarehouse = ['warehouse', 'procurement', 'finance', 'admin'].includes(state.me.user.role) && state.me.org.settings?.matching !== 'two';
+  const wh = seesWarehouse ? await api('GET', '/api/warehouse') : null;
   const card = (p) => {
     const ord = p.lines.reduce((s, l) => s + l.qty, 0), rec = p.lines.reduce((s, l) => s + Math.min(l.received, l.qty), 0);
     const pct = ord ? Math.round((rec / ord) * 100) : 0;
     const area = h('div', {});
     const form = () => {
       const err = formError();
-      const inputs = p.lines.map((l) => { const i = h('input', { type: 'number', min: 0, step: 1, inputmode: 'numeric', value: Math.max(0, l.qty - l.received) }); return [l, i]; });
+      const inputs = p.lines.map((l) => [l, h('input', { type: 'number', min: 0, step: 1, inputmode: 'numeric', value: Math.max(0, l.qty - l.received) }), h('input', { type: 'number', min: 0, step: 1, inputmode: 'numeric', value: 0 })]);
       const f = h('form', { class: 'action-form', novalidate: true },
-        inputs.map(([l, i]) => h('div', { class: 'qty-row' }, h('div', {}, h('b', { text: l.name }), h('p', { class: 'muted small', text: `${t('ordered')}: ${l.qty} · ${t('already_received')}: ${l.received}` })), formField(t('received_qty'), i))),
+        inputs.map(([l, i, d]) => h('div', { class: 'qty-row' }, h('div', {}, h('b', { text: l.name }), h('p', { class: 'muted small', text: `${t('ordered')}: ${l.qty} · ${t('already_received')}: ${l.received}` })), formField(t('arrived_qty'), i), formField(t('damaged_qty'), d))),
         err, h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'submit', text: t('save_receipt') }), h('button', { class: 'btn ghost', type: 'button', onclick: () => area.replaceChildren(), text: t('cancel') })));
       f.onsubmit = async (e) => {
         e.preventDefault();
         err.hidden = true;
         try {
-          const r = await api('POST', '/api/goods-receipts', { poNumber: p.poNumber, lines: inputs.map(([l, i]) => ({ sku: l.sku, qty: Number(i.value) })) });
+          const r = await api('POST', '/api/goods-receipts', { poNumber: p.poNumber, lines: inputs.map(([l, i, d]) => ({ sku: l.sku, qty: Number(i.value), damaged: Number(d.value || 0) })) });
           toast(`${t('receipt_saved', { grn: r.grn.grnNumber })}${r.resumed.length ? ` ${t('resumed_n', { n: r.resumed.length })}` : ''}`);
-          render();
+          area.replaceChildren(deliveryReportCard(r.report));
+          area.scrollIntoView({ block: 'start' });
         } catch (x) { showErr(err, x); }
       };
       return f;
@@ -757,9 +830,14 @@ async function pageOrders() {
       h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('i', { style: `width:${pct}%` })),
       h('div', { class: 'table-wrap' }, h('table', {}, h('thead', {}, h('tr', {}, [t('item'), t('ordered'), t('col_received'), t('unit_price')].map((x, i) => h('th', { class: i ? 'num' : '', text: x })))),
         h('tbody', {}, p.lines.map((l) => h('tr', {}, h('td', { text: l.name }), h('td', { class: 'num', text: String(l.qty) }), h('td', { class: 'num', text: String(l.received) }), h('td', { class: 'num', text: money(l.unitPrice) })))))),
-      canRecord && pct < 100 ? h('button', { class: 'btn', type: 'button', onclick: () => area.replaceChildren(form()), text: t('record') }) : null, area);
+      h('div', { class: 'row wrap' },
+        canRecord && pct < 100 ? h('button', { class: 'btn', type: 'button', onclick: () => area.replaceChildren(form()), text: t('record') }) : null,
+        seesWarehouse ? (p.grns || []).map((g) => h('button', { type: 'button', class: 'btn small ghost', text: t('dr_view', { grn: g.grnNumber }),
+          onclick: async () => area.replaceChildren(deliveryReportCard(await api('GET', `/api/goods-receipts/${encodeURIComponent(g.grnNumber)}`))) })) : null),
+      area);
   };
   return h('div', { class: 'stack' }, h('div', { class: 'page-head' }, h('h1', { text: t('orders_title') }), h('p', { class: 'muted', text: t('orders_lead') })),
+    wh ? await warehousePriorities(wh) : null, wh ? supplierHistory(wh) : null,
     pos.length ? h('ul', { class: 'po-list' }, pos.map(card)) : h('p', { class: 'card muted-card', text: t('no_orders') }));
 }
 

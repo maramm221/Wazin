@@ -82,9 +82,27 @@ describe('the full hand-off flow in a seeded company', () => {
     await c.as('warehouse');
     const pos = await c.call('GET', '/api/purchase-orders');
     const po = pos.body.find((p) => p.poNumber === 'PO-2026-1109');
+    // The warehouse is told which delivery to receive first: this one has an invoice waiting on it.
+    const first = (await c.call('GET', '/api/warehouse')).body.priorities.find((x) => x.poNumber === po.poNumber);
+    assert.equal(first.waitingInvoices, 1);
     const r = await c.call('POST', '/api/goods-receipts', { poNumber: po.poNumber, lines: po.lines.map((l) => ({ sku: l.sku, qty: l.qty })) });
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.resumed, [{ id: 'WZN-00010', status: 'APPROVED_AUTO' }]);
+    assert.deepEqual(r.body.report.flags, { damaged: 0, over: 0, outstanding: 0 });
+    // Damaged units are recorded but not counted as received; the report drafts a message to the supplier.
+    assert.equal((await c.call('POST', '/api/goods-receipts', { poNumber: 'PO-2026-1108', lines: [{ sku: 'IND-BRG', qty: 1, damaged: 2 }] })).body.error, 'invalid_damaged');
+    const d = await c.call('POST', '/api/goods-receipts', { poNumber: 'PO-2026-1108', lines: [{ sku: 'IND-BRG', qty: 2, damaged: 2 }] });
+    const line = d.body.report.lines.find((l) => l.sku === 'IND-BRG');
+    assert.equal(line.damaged, 2);
+    assert.equal(line.accepted, 0);
+    assert.match(d.body.report.message.bodyEn, /arrived damaged/);
+    assert.equal((await c.call('GET', `/api/goods-receipts/${d.body.grn.grnNumber}`)).body.flags.damaged, 1);
+    const hist = (await c.call('GET', '/api/warehouse')).body.suppliers.find((x) => x.supplier === 'Jeddah Industrial Parts');
+    assert.ok(hist.unitsDamaged >= 2);
+    // The dashboard shows live decision numbers next to the measured test results.
+    const q = (await c.call('GET', '/api/dashboard')).body.quality;
+    assert.ok(q.decisions >= 13 && q.noPerson >= 1);
+    assert.ok(q.tested.hard.correct > 0.5 && q.tested.hard.correct < 1);
   });
 
   test('bad quantities are rejected', async () => {

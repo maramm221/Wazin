@@ -1,6 +1,7 @@
 // Business operations. HTTP-independent so it can be tested directly.
 // Every operation takes the acting user, checks the role, writes the audit trail.
 import crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { WazinAgent, ledgerEntry, OWNERS } from '../src/agent.js';
 import { isValidSaudiVat, round2 } from '../src/zatca.js';
 import { SqlERP } from './store.js';
@@ -46,6 +47,21 @@ export class AppError extends Error {
   }
 }
 const bad = (code, detail) => new AppError(400, code, detail);
+// The measured results from the evaluations in eval/, shown on the dashboard next to the live numbers.
+function loadTested() {
+  try {
+    const read = (f) => JSON.parse(readFileSync(new URL(`../eval/${f}`, import.meta.url), 'utf8'));
+    const r = read('realistic.json'), h = read('heldout.json');
+    const sets = [...h.seeds, h.vendors, h.vendorsCompound];
+    const n = sets.reduce((a, x) => a + x.n, 0), handled = sets.reduce((a, x) => a + x.readable, 0);
+    return {
+      heldout: { invoices: n, handled: handled / n, wrongPayments: sets.reduce((a, x) => a + x.falseApprovals, 0) },
+      balanced: { invoices: r.balanced.n, handled: r.balanced.automated, correctOfHandled: r.balanced.accuracyAutomated },
+      hard: { invoices: (r.hardFresh || r.hard).n, correct: (r.hardFresh || r.hard).accuracy },
+    };
+  } catch { return null; }
+}
+const TESTED = loadTested();
 export const SUPPORT_TOPICS = ['technical', 'account', 'billing', 'zatca', 'security', 'feedback'];
 const forbidden = () => new AppError(403, 'forbidden');
 const notFound = () => new AppError(404, 'not_found');
@@ -457,6 +473,11 @@ export class Service {
     });
   }
 
+  /**
+   * The warehouse records a delivery. For each line it gives how many arrived and how many of those
+   * are damaged; only undamaged units count as received for payment. Returns a delivery report and
+   * re-checks every invoice that was waiting for these goods.
+   */
   async recordReceipt(ctx, { poNumber, lines, note }, locked = false) {
     if (!can(ctx.user, 'warehouse')) throw forbidden();
     const po = this.s.getPO(ctx.org.id, str(poNumber, 60));
@@ -465,10 +486,12 @@ export class Service {
     const clean = [];
     for (const l of lines) {
       const pl = po.lines.find((x) => x.sku === l.sku);
-      const qty = Number(l.qty);
+      const arrived = Number(l.qty);
+      const damaged = l.damaged === undefined || l.damaged === '' ? 0 : Number(l.damaged);
       if (!pl) throw bad('unknown_item', { sku: l.sku });
-      if (!Number.isInteger(qty) || qty < 0 || qty > 1e6) throw bad('invalid_quantity', { sku: l.sku });
-      if (qty > 0) clean.push({ sku: pl.sku, qty });
+      if (!Number.isInteger(arrived) || arrived < 0 || arrived > 1e6) throw bad('invalid_quantity', { sku: l.sku });
+      if (!Number.isInteger(damaged) || damaged < 0 || damaged > arrived) throw bad('invalid_damaged', { sku: l.sku });
+      if (arrived > 0) clean.push({ sku: pl.sku, qty: arrived - damaged, arrived, damaged });
     }
     if (!clean.length) throw bad('lines_required');
     const work = async () => {
@@ -489,9 +512,102 @@ export class Service {
         this.#commit(ctx.org, rec, r, erp, 'wazin', 'invoice.resumed_after_goods_receipt', grn.grnNumber);
         resumed.push({ id: rec.id, status: r.decision });
       }
-      return { grn, resumed };
+      return { grn, resumed, report: { ...this.#deliveryReport(ctx.org.id, po, grn.grnNumber), resumed } };
     };
     return locked ? work() : this.lock.run(ctx.org.id, work);
+  }
+
+  /** A delivery report for one goods receipt, as the warehouse would file it: what arrived against the order, and what to tell the supplier. */
+  deliveryReport(ctx, grnNumber) {
+    if (!can(ctx.user, 'warehouse', 'procurement', 'finance')) throw forbidden();
+    const g = this.s.getGRN(ctx.org.id, str(grnNumber, 40));
+    if (!g) throw notFound();
+    return this.#deliveryReport(ctx.org.id, this.s.getPO(ctx.org.id, g.poNumber), g.grnNumber);
+  }
+
+  #deliveryReport(org, po, grnNumber) {
+    const all = this.s.getGRNs(org, po.poNumber);
+    const idx = all.findIndex((g) => g.grnNumber === grnNumber);
+    const g = all[idx], before = all.slice(0, idx);
+    const vendor = this.s.getVendor(org, po.vendorVat);
+    const lines = po.lines.map((pl) => {
+      const prior = before.reduce((a, x) => a + x.lines.filter((l) => l.sku === pl.sku).reduce((b, l) => b + l.qty, 0), 0);
+      const now = g.lines.find((l) => l.sku === pl.sku) || { qty: 0, arrived: 0, damaged: 0 };
+      const arrived = now.arrived ?? now.qty, damaged = now.damaged || 0, accepted = now.qty;
+      const total = prior + accepted;
+      return { sku: pl.sku, name: pl.name, ordered: pl.qty, before: prior, arrived, damaged, accepted, outstanding: Math.max(0, pl.qty - total), over: Math.max(0, total - pl.qty) };
+    }).filter((l) => l.arrived > 0 || l.outstanding > 0);
+    const damaged = lines.filter((l) => l.damaged > 0), over = lines.filter((l) => l.over > 0), short = lines.filter((l) => l.outstanding > 0);
+    let message = null;
+    if (damaged.length || over.length) {
+      const en = [...damaged.map((l) => `- ${l.name}: ${l.damaged} of ${l.arrived} arrived damaged. Please send replacements or a credit note.`),
+        ...over.map((l) => `- ${l.name}: ${l.over} more than ordered. We are holding them for you to collect; they will not be paid.`)];
+      const ar = [...damaged.map((l) => `- ${l.name}: وصل ${l.damaged} من ${l.arrived} تالفاً. يرجى إرسال بديل أو إشعار دائن.`),
+        ...over.map((l) => `- ${l.name}: ${l.over} زيادة على المطلوب. نحتفظ بها لاستلامها ولن تُدفع.`)];
+      message = { to: vendor?.email || vendor?.nameEn || '', subject: `Delivery ${g.grnNumber} for ${po.poNumber} / تقرير الاستلام`,
+        bodyEn: `Hello,\n\nWe received your delivery for ${po.poNumber} (our receipt ${g.grnNumber}):\n${en.join('\n')}\n\nOnly undamaged goods up to the ordered quantity will be paid.\n\nThank you`,
+        bodyAr: `مرحباً،\n\nاستلمنا شحنتكم لأمر الشراء ${po.poNumber} (سند الاستلام ${g.grnNumber}):\n${ar.join('\n')}\n\nلن يُدفع إلا مقابل البضاعة السليمة وبحدود الكمية المطلوبة.\n\nشكراً لكم` };
+    }
+    return { grnNumber: g.grnNumber, poNumber: po.poNumber, supplier: vendor?.nameEn || po.vendorVat, supplierAr: vendor?.nameAr, receivedBy: g.receivedBy, receivedAt: g.createdAt,
+      lines, flags: { damaged: damaged.length, over: over.length, outstanding: short.length }, message };
+  }
+
+  /**
+   * The warehouse view: which deliveries to receive first (money and discounts waiting on them),
+   * and each supplier's delivery history (damage, over-delivery, invoices billed for more than arrived).
+   */
+  warehouseOverview(ctx) {
+    if (!can(ctx.user, 'warehouse', 'procurement', 'finance')) throw forbidden();
+    const org = ctx.org.id;
+    const invoices = this.s.listInvoices(org, { limit: 500 });
+    const vendors = Object.fromEntries(this.s.listVendors(org).map((v) => [v.vat, v]));
+    const priorities = [];
+    for (const po of this.s.listPOs(org)) {
+      const got = {};
+      for (const g of this.s.getGRNs(org, po.poNumber)) for (const l of g.lines) got[l.sku] = (got[l.sku] || 0) + l.qty;
+      const outstanding = po.lines.reduce((a, l) => a + Math.max(0, l.qty - (got[l.sku] || 0)), 0);
+      if (!outstanding) continue;
+      const waiting = invoices.filter((i) => i.poNumber === po.poNumber && (i.status === 'PARKED' || (i.status === 'EXCEPTION' && i.owner === 'WAREHOUSE')));
+      const v = vendors[po.vendorVat];
+      let discount = null;
+      for (const w of waiting) {
+        const inv = this.s.getInvoice(org, w.id).result?.invoice;
+        if (v?.earlyPayDiscount?.pct && inv?.issueDate && w.total) {
+          const by = new Date(Date.parse(inv.issueDate) + v.earlyPayDiscount.days * 864e5).toISOString().slice(0, 10);
+          const amount = round2((w.total * v.earlyPayDiscount.pct) / 100);
+          if (!discount || by < discount.by) discount = { by, amount };
+        }
+      }
+      priorities.push({ poNumber: po.poNumber, supplier: v?.nameEn || po.vendorVat, supplierAr: v?.nameAr, outstanding,
+        waitingInvoices: waiting.length, waitingAmount: round2(waiting.reduce((a, w) => a + (w.total || 0), 0)), discount });
+    }
+    priorities.sort((a, b) => (b.waitingInvoices > 0) - (a.waitingInvoices > 0) || (a.discount?.by || '9') .localeCompare(b.discount?.by || '9') || b.waitingAmount - a.waitingAmount);
+
+    const hist = {};
+    const row = (vat) => (hist[vat] ||= { vat, supplier: vendors[vat]?.nameEn || vat, supplierAr: vendors[vat]?.nameAr, deliveries: 0, unitsArrived: 0, unitsDamaged: 0, overDelivered: 0, billedMoreThanArrived: 0 });
+    const poVendor = Object.fromEntries(this.s.listPOs(org).map((p) => [p.poNumber, p]));
+    const totals = {};
+    for (const g of this.s.listGRNs(org)) {
+      const po = poVendor[g.poNumber];
+      if (!po) continue;
+      const h = row(po.vendorVat);
+      h.deliveries++;
+      for (const l of g.lines) {
+        h.unitsArrived += l.arrived ?? l.qty;
+        h.unitsDamaged += l.damaged || 0;
+        const key = `${g.poNumber}|${l.sku}`;
+        const ordered = po.lines.find((x) => x.sku === l.sku)?.qty || 0;
+        const before = totals[key] || 0;
+        totals[key] = before + l.qty;
+        if (totals[key] > ordered && before <= ordered) h.overDelivered++;
+      }
+    }
+    for (const i of invoices) {
+      if (i.status === 'EXCEPTION' && i.owner === 'WAREHOUSE' && i.vendorVat) row(i.vendorVat).billedMoreThanArrived++;
+    }
+    const suppliers = Object.values(hist).map((h) => ({ ...h, issues: h.unitsDamaged + h.overDelivered + h.billedMoreThanArrived }))
+      .sort((a, b) => b.issues - a.issues || b.deliveries - a.deliveries);
+    return { priorities: priorities.slice(0, 8), suppliers };
   }
 
   // ======================= suppliers =======================
@@ -595,6 +711,13 @@ export class Service {
       discounts: round2(led.discounts),
       // Real-world accuracy signal: how often people disputed a decision, and how often Wazin turned out right.
       disputes: { open: byStatus.DISPUTED || 0, ...this.s.disputeCounts(ctx.org.id) },
+      // Live decision numbers for this company, next to the measured test results.
+      quality: {
+        decisions: Object.values(byStatus).reduce((a, n) => a + n, 0),
+        noPerson: byStatus.APPROVED_AUTO || 0,
+        toPerson: Object.entries(byStatus).filter(([k]) => k !== 'APPROVED_AUTO').reduce((a, [, n]) => a + n, 0),
+        tested: TESTED,
+      },
       myTasks: myTasks.slice(0, 50),
     };
   }

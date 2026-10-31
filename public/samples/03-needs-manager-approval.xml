@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ProfileID>reporting:1.0</cbc:ProfileID>
+  <cbc:ID>JIP-31092</cbc:ID>
+  <cbc:UUID>demo-JIP-31092</cbc:UUID>
+  <cbc:IssueDate>2026-10-24</cbc:IssueDate>
+  <cbc:IssueTime>10:15:00</cbc:IssueTime>
+  <cbc:InvoiceTypeCode name="0100000">388</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>
+  <cac:OrderReference><cbc:ID>PO-2026-1204</cbc:ID></cac:OrderReference>
+  <cac:AdditionalDocumentReference>
+    <cbc:ID>QR</cbc:ID>
+    <cac:Attachment><cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">ARdKZWRkYWggSW5kdXN0cmlhbCBQYXJ0cwIPMzAyMjMzNDQ1NTAwMDAzAxMyMDI2LTEwLTI0VDEwOjE1OjAwBAg2MjI4NC4wMAUHODEyNC4wMA==</cbc:EmbeddedDocumentBinaryObject></cac:Attachment>
+  </cac:AdditionalDocumentReference>
+  <cac:AccountingSupplierParty><cac:Party>
+    <cac:PartyTaxScheme><cbc:CompanyID>302233445500003</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+    <cac:PartyLegalEntity><cbc:RegistrationName>Jeddah Industrial Parts</cbc:RegistrationName></cac:PartyLegalEntity>
+  </cac:Party></cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty><cac:Party>
+    <cac:PartyTaxScheme><cbc:CompanyID>300999888700003</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+    <cac:PartyLegalEntity><cbc:RegistrationName>Sahara Retail Co.</cbc:RegistrationName></cac:PartyLegalEntity>
+  </cac:Party></cac:AccountingCustomerParty>
+  <cac:PaymentMeans><cbc:PaymentMeansCode>42</cbc:PaymentMeansCode><cac:PayeeFinancialAccount><cbc:ID>SA6545000000123456789012</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="SAR">8124.00</cbc:TaxAmount></cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="SAR">54160.00</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="SAR">54160.00</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="SAR">62284.00</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="SAR">62284.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="PCE">8</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="SAR">44800.00</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Name>Centrifugal pump</cbc:Name>
+      <cac:SellersItemIdentification><cbc:ID>IND-PMP</cbc:ID></cac:SellersItemIdentification>
+      <cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>15.00</cbc:Percent></cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="SAR">5600.00</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>
+  <cac:InvoiceLine>
+    <cbc:ID>2</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="PCE">12</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="SAR">9360.00</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Name>Gate valve 4"</cbc:Name>
+      <cac:SellersItemIdentification><cbc:ID>IND-VLV</cbc:ID></cac:SellersItemIdentification>
+      <cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>15.00</cbc:Percent></cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="SAR">780.00</cbc:PriceAmount></cac:Price>
+  </cac:InvoiceLine>
+</Invoice>
