@@ -1,7 +1,6 @@
 // Business operations. HTTP-independent so it can be tested directly.
 // Every operation takes the acting user, checks the role, writes the audit trail.
 import crypto from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { WazinAgent, ledgerEntry, OWNERS } from '../src/agent.js';
 import { isValidSaudiVat, round2 } from '../src/zatca.js';
 import { SqlERP } from './store.js';
@@ -47,21 +46,6 @@ export class AppError extends Error {
   }
 }
 const bad = (code, detail) => new AppError(400, code, detail);
-// The measured results from the evaluations in eval/, shown on the dashboard next to the live numbers.
-function loadTested() {
-  try {
-    const read = (f) => JSON.parse(readFileSync(new URL(`../eval/${f}`, import.meta.url), 'utf8'));
-    const r = read('realistic.json'), h = read('heldout.json');
-    const sets = [...h.seeds, h.vendors, h.vendorsCompound];
-    const n = sets.reduce((a, x) => a + x.n, 0), handled = sets.reduce((a, x) => a + x.readable, 0);
-    return {
-      heldout: { invoices: n, handled: handled / n, wrongPayments: sets.reduce((a, x) => a + x.falseApprovals, 0) },
-      balanced: { invoices: r.balanced.n, handled: r.balanced.automated, correctOfHandled: r.balanced.accuracyAutomated },
-      hard: { invoices: (r.hardFresh || r.hard).n, correct: (r.hardFresh || r.hard).accuracy },
-    };
-  } catch { return null; }
-}
-const TESTED = loadTested();
 export const SUPPORT_TOPICS = ['technical', 'account', 'billing', 'zatca', 'security', 'feedback'];
 const forbidden = () => new AppError(403, 'forbidden');
 const notFound = () => new AppError(404, 'not_found');
@@ -711,12 +695,11 @@ export class Service {
       discounts: round2(led.discounts),
       // Real-world accuracy signal: how often people disputed a decision, and how often Wazin turned out right.
       disputes: { open: byStatus.DISPUTED || 0, ...this.s.disputeCounts(ctx.org.id) },
-      // Live decision numbers for this company, next to the measured test results.
+      // Live decision numbers for this company; they change as invoices arrive and disputes are settled.
       quality: {
         decisions: Object.values(byStatus).reduce((a, n) => a + n, 0),
         noPerson: byStatus.APPROVED_AUTO || 0,
         toPerson: Object.entries(byStatus).filter(([k]) => k !== 'APPROVED_AUTO').reduce((a, [, n]) => a + n, 0),
-        tested: TESTED,
       },
       myTasks: myTasks.slice(0, 50),
     };

@@ -463,25 +463,19 @@ function disputeNote(v) {
     h('p', {}, h('b', { text: `${t(`dk_${d.kind}`)}: ` }), d.note || ''));
 }
 
-// Decision quality: what Wazin decided in this company, how often people disputed it, and the measured test results.
+// Decision quality: what Wazin decided in this company and how often people disputed it. Updates as invoices arrive.
 function qualityCard(d) {
-  const q = d.quality || {}, x = d.disputes || {}, tested = q.tested;
+  const q = d.quality || {}, x = d.disputes || {};
   const pct = (v) => `${Math.round(v * 100)}%`;
   const stat = (label, value, sub) => h('li', {}, h('span', { class: 'kpi-label', text: label }), h('b', { class: 'num', text: value }), sub ? h('span', { class: 'muted small', text: sub }) : null);
   const settled = (x.confirmed || 0) + (x.corrected || 0);
   return h('section', { class: 'card quality', 'aria-labelledby': 'dq_h' },
     h('h2', { id: 'dq_h', text: t('dq_title') }),
-    h('h3', { class: 'q-sub', text: t('dq_live') }),
     h('ul', { class: 'q-grid' },
       stat(t('dq_decisions'), whole(q.decisions)),
       stat(t('dq_no_person'), whole(q.noPerson), q.decisions ? pct(q.noPerson / q.decisions) : null),
       stat(t('dq_raised'), whole(x.raised), x.open ? t('dq_open_n', { n: x.open }) : null),
       stat(t('dq_after_review'), settled ? pct(x.confirmed / settled) : '—', settled ? t('dq_settled', { right: x.confirmed, n: settled }) : t('dq_none'))),
-    tested ? h('h3', { class: 'q-sub', text: t('dq_tested') }) : null,
-    tested ? h('ul', { class: 'q-grid' },
-      stat(t('dq_t_heldout'), pct(tested.heldout.handled), t('dq_t_heldout_s', { n: whole(tested.heldout.invoices), w: tested.heldout.wrongPayments })),
-      stat(t('dq_t_balanced'), pct(tested.balanced.handled), t('dq_t_balanced_s', { c: pct(tested.balanced.correctOfHandled) })),
-      stat(t('dq_t_hard'), pct(tested.hard.correct), t('dq_t_hard_s', { n: tested.hard.invoices }))) : null,
     h('p', { class: 'muted small', text: t('dq_lead') }));
 }
 

@@ -99,10 +99,10 @@ describe('the full hand-off flow in a seeded company', () => {
     assert.equal((await c.call('GET', `/api/goods-receipts/${d.body.grn.grnNumber}`)).body.flags.damaged, 1);
     const hist = (await c.call('GET', '/api/warehouse')).body.suppliers.find((x) => x.supplier === 'Jeddah Industrial Parts');
     assert.ok(hist.unitsDamaged >= 2);
-    // The dashboard shows live decision numbers next to the measured test results.
+    // The dashboard's decision numbers are live: they include every invoice Wazin has decided.
     const q = (await c.call('GET', '/api/dashboard')).body.quality;
     assert.ok(q.decisions >= 13 && q.noPerson >= 1);
-    assert.ok(q.tested.hard.correct > 0.5 && q.tested.hard.correct < 1);
+    assert.equal(q.decisions, q.noPerson + q.toPerson);
   });
 
   test('bad quantities are rejected', async () => {
@@ -162,8 +162,11 @@ describe('the full hand-off flow in a seeded company', () => {
   });
 
   test('a newly arriving invoice is a fresh case, not a duplicate of the inbox', async () => {
+    const before = (await c.call('GET', '/api/dashboard')).body.quality;
     const r = await c.call('POST', '/api/invoices', { doc: laterInvoices[0].doc });
     assert.equal(r.body.status, 'APPROVED_AUTO');
+    const after = (await c.call('GET', '/api/dashboard')).body.quality;
+    assert.deepEqual([after.decisions, after.noPerson], [before.decisions + 1, before.noPerson + 1], 'decision quality updates with each new invoice');
   });
 
   test('re-billing the same goods under a new number and date is blocked', async () => {

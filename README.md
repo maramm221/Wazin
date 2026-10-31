@@ -8,6 +8,20 @@ HUMAIN Future AI Builders Hackathon 2026 · **Challenge 3: Autonomous Enterprise
 
 ---
 
+## For judges: try it in 2 minutes
+
+1. Open **https://wazin.onrender.com** (free hosting, kept awake by a 5-minute monitor; data resets on restart).
+2. Sign in as **admin@sahara.example** (the administrator can do every team's step). The password is in the submission notes. Other teams: `ap@`, `finance@`, `procurement@`, `warehouse@`, `treasury@sahara.example`.
+3. **New invoice → Sample invoices to try → Use → Check.** Ten samples cover every kind of decision.
+4. **Orders & receipts:** record a delivery (try marking a few units damaged) to see the delivery report.
+5. Test results: [`eval/HELDOUT.md`](eval/HELDOUT.md) and [`eval/REALISTIC.md`](eval/REALISTIC.md). Tests run on every upload (GitHub Actions).
+
+You can also open your own company account for free; it starts empty, so you add suppliers and orders first.
+
+**Built with:** Node.js 22 (built-in web server, crypto and SQLite; no third-party runtime packages), plain JavaScript web app (Arabic and English), optional AI reader (Anthropic Claude or any OpenAI-compatible model such as ALLaM), deployed on Render.
+
+---
+
 ## What it is
 
 A **web application** (software as a service). People use it in a browser on a computer or phone; nothing to install. Each company gets its own private **workspace**, with its own suppliers, purchase orders, invoices and team. It is a private B2B service a company would subscribe to, not a government platform. (A `.gov.sa` address is only for government bodies; a ministry could still use Wazin for its own supplier invoices.)
@@ -17,7 +31,7 @@ A **web application** (software as a service). People use it in a browser on a c
 | Accounts Payable | Upload invoices, fix unreadable ones, send supplier corrections |
 | Finance Manager | Approve invoices above the automatic limit |
 | Procurement | Settle price differences: amend the order or reject the invoice |
-| Warehouse | Record what actually arrived |
+| Warehouse | See which delivery to receive first, record what arrived and what is damaged, get a delivery report |
 | Treasury | Verify bank-account changes by call-back; manage supplier bank details |
 | Administrator | Import data, add people, set the approval limit |
 
@@ -35,6 +49,7 @@ Each person sees **their own tasks** on the home page, with numbered steps for w
 | Wrong VAT number, VAT maths or QR code | Drafts a correction request to the supplier | Accounts Payable → Supplier |
 | Price above the order, item not on the order, unknown order or supplier | Shows the overcharge, offers "amend order" or "reject" | Procurement |
 | Billed more than arrived | Asks for the true received quantity | Warehouse |
+| Goods arrive damaged or over the order | Never pays for them; delivery report and supplier message | Warehouse |
 | New bank account on the invoice | **Blocks payment** until Treasury confirms by calling the number on file | Treasury |
 | Duplicate, or the same goods billed again under a new number and date | **Blocks payment** | Accounts Payable |
 
